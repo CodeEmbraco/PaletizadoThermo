@@ -58,7 +58,6 @@ import {
   notifyProductScanned,
 } from "../partials/paletization/Toasts";
 
-
 const useStyles = makeStyles((theme) => ({
   root: {
     display: "flex",
@@ -112,11 +111,6 @@ function PaletizationView() {
   useScanDetection({
     onComplete: async (code) => {
       console.log(code);
-      //dispatch(setSelectBarcodeProduct(code));
-      //if (code.replace(/Shift/g, "").toUpperCase() === "NEW") {
-      //  handleNew();
-      //  return;
-      // }
 
       const formattedCode = code.replace(/Shift/g, "");
       if (componentsList.length != 0 && componentsList.length == palletamount) {
@@ -125,7 +119,6 @@ function PaletizationView() {
       }
 
       if (formattedCode.length >= 11) {
-        // Si la cadena tiene al menos 9 caracteres, considerarla un ID de producto
         const codeScannedEvent = {
           text:
             "Producto escaneado: " + code.replace(/Shift/g, "").toUpperCase(),
@@ -133,10 +126,6 @@ function PaletizationView() {
         };
         notifyProductScanned(code.replace(/Shift/g, "").toUpperCase());
         setBarcodeProduct(code.replace(/Shift/g, "").toUpperCase());
-
-        // Actualizamos el estado global de barcodeProduct usando Redux
-        //selectBarcodeProduct2 = formattedCode;
-        //dispatch(setSelectBarcodeProduct(code.replace(/Shift/g, ""));  // Usamos dispatch aquí
 
         dispatch(addEventToPaletizationLog(codeScannedEvent));
         dispatch(getTestResults(code.replace(/Shift/g, "").toUpperCase()));
@@ -152,10 +141,6 @@ function PaletizationView() {
         dispatch(addEventToPaletizationLog(getTestResultsEvent));
         const condenserMaterial = orderSelected.matnr.slice(-9);
         const compressorMaterial = orderSelected.components[0].matnr;
-
-        //const response = await dispatch(
-        //  getCompressor(code.replace(/Shift/g, "").toUpperCase())
-        //);
 
         const data = {
           palette: palletSelected.identifier,
@@ -452,10 +437,8 @@ function PaletizationView() {
                     <div style={{ display: "none" }}>
                       <LabelPrinting
                         ref={labelRef}
-                        qrValue={
-                          "VALUE TO PRINT"
-                        }
-                        metadata={[]}
+                        qrValue={barcodeProduct}
+                        metadata={metadata}
                       />
                     </div>
                   </div>
