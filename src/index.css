@@ -15,6 +15,11 @@ h1 {
   line-height: 1.1;
 }
 
+.capacidad-content {
+  font-size: 3.2em;
+  line-height: 0.5;
+}
+
 @page {
   size: 16.8cm 7cm; /* Tamaño de la etiqueta horizontal */
   margin: 10px; /* Sin márgenes para aprovechar todo el espacio de la etiqueta */
@@ -174,8 +179,6 @@ h1 {
 
 .container-table2 {
   border-collapse: collapse;
-  border: 1px solid black;
-  width: 22.4cm;
 }
 
 .row7 {
@@ -192,6 +195,10 @@ h1 {
   width: 200px;
 }
 
+#title-refri {
+  width: 197px !important;
+}
+
 #title-corrent {
   width: 200px !important;
 }
@@ -201,7 +208,7 @@ h1 {
 }
 
 #title-phases {
-  width: 92px !important;
+  width: 98px !important;
 }
 
 .row7 .title .container-info {
@@ -238,7 +245,7 @@ h1 {
 }
 
 .row9 {
-  width: 747px !important;
+  width: 750px !important;
   display: flex;
   gap: 29px;
   align-items: center;
@@ -292,4 +299,9 @@ h1 {
 
 #integration-modal{
   background-color: transparent !important;
+}
+
+.logoNidec {
+    max-height: 50px;
+    width: auto;
 }

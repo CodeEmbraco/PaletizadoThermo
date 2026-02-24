@@ -22,6 +22,7 @@ import ReactToPrint from "react-to-print";
 import LabelPrinting from "../partials/genealogy/LabelPrinting";
 
 import {
+  getMetadataFromOrder,
   metadataOrderSelected,
   palletAmount,
   selectOrderSelected,
@@ -151,6 +152,7 @@ function PaletizationView() {
         };
         console.log(data);
         dispatch(mountComponent(data));
+        dispatch(getMetadataFromOrder(condenserMaterial));
       } else {
         handleNew();
         console.log("HDR Toy escaneando pallet");
@@ -468,18 +470,16 @@ function PaletizationView() {
                         e.currentTarget.blur();
                       }}
                       className={
-                        componentsList.some(
-                          (component) => component.send_to_sap === false
-                        )
-                          ? "w-64 h-12 bg-primary rounded text-white text-base flex justify-center hover:bg-green-500"
-                          : "w-64 h-12 bg-secondary rounded text-black text-base flex justify-center hover:text-white disabled:pointer-events-none"
+                        // Si faltan componentes O ya están todos enviados a SAP, mostramos el estilo desactivado (gris/secundario)
+                        componentsList.length < editablePalletAmount || 
+                        !componentsList.some((component) => component.send_to_sap === false)
+                          ? "w-64 h-12 bg-secondary rounded text-slate-400 text-base flex justify-center cursor-not-allowed opacity-70"
+                          : "w-64 h-12 bg-primary rounded text-white text-base flex justify-center hover:bg-green-500"
                       }
                       disabled={
-                        componentsList.some(
-                          (component) => component.send_to_sap === false
-                        )
-                          ? false
-                          : true
+                        // El botón se bloquea si: Faltan componentes O NO hay nada pendiente por enviar a SAP
+                        componentsList.length < editablePalletAmount || 
+                        !componentsList.some((component) => component.send_to_sap === false)
                       }
                     >
                       <span className="bg-transparent my-auto text-white font-semibold">

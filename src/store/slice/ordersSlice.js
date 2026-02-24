@@ -52,7 +52,7 @@ export const getOpenOrdersList = () => (dispatch) => {
       .then((response) => {
         if (response.status === 200) {
           //dispatch(setLoading(false));
-          const filtered_orders = response.data.filter(elemento => elemento.arbpl === "MXCDU01");
+          const filtered_orders = response.data.filter(elemento => elemento.arbpl === "MXSG002");
           console.log(filtered_orders);
           dispatch(setOpenOrdersList(filtered_orders));
         } else {

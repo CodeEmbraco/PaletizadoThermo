@@ -1,5 +1,7 @@
 import { forwardRef, useEffect, useState } from "react";
 import BarcodeGeneratorFunction from "./BarcodeGenerator";
+import Embraco from '../../../src/assets/images/embraco-logo.png'
+import Nidec from '../../../src/assets/images/Global-Appliance.png'
 
 const LabelPrinting = forwardRef((props, ref) => {
   const [currentDate, setCurrentDate] = useState('');
@@ -32,13 +34,13 @@ const LabelPrinting = forwardRef((props, ref) => {
         <table className="container-table">
           <tr className="container-row">
             <td className="row1">
-              <span>Embraco</span>
+              <span><img src={Nidec} alt="Nidec" className="logoNidec" /></span>
             </td>
             <td className="row2">
               <span className="title">MODELO - MODEL</span>
               <span className="content">
                 {Array.isArray(metadata) &&
-                  metadata.find((obj) => obj.ID_CARACTMATERIAL === 1)
+                  metadata.find((obj) => obj.ID_CARACTMATERIAL === 299)
                     ?.DE_VALORCARACTMAT}
               </span>
             </td>
@@ -71,9 +73,10 @@ const LabelPrinting = forwardRef((props, ref) => {
                 </div>
                 <div className="content">
                   <span>
-                    {Array.isArray(metadata) &&
+                    ----
+                    {/* {Array.isArray(metadata) &&
                       metadata.find((obj) => obj.ID_CARACTMATERIAL === 119)
-                        ?.DE_VALORCARACTMAT}
+                        ?.DE_VALORCARACTMAT} */}
                   </span>
                 </div>
               </div>
@@ -81,32 +84,7 @@ const LabelPrinting = forwardRef((props, ref) => {
             <td className="row6">
               <div className="title">CAPACIDAD - CAPACITY</div>
               <div className="content-details">
-                <h6 className="content">
-                  <div className="information">
-                    <span>50Hz LBP</span>
-                  </div>
-                </h6>
-                <h6 className="content">
-                  <div className="information">
-                    <span>50Hz HBP</span>
-                  </div>
-                </h6>
-                <h6 className="content">
-                  <div className="information">
-                    <span>60Hz LBP</span>
-                    <span className="details">
-                    {Array.isArray(metadata) &&
-                  metadata.find((obj) => obj.ID_CARACTMATERIAL === 115)
-                    ?.DE_VALORCARACTMAT}
-                    </span>
-                  </div>
-                </h6>
-                <h6 className="content">
-                  <div className="information">
-                    <span>60Hz HBP</span>
-                    <span className="details"></span>
-                  </div>
-                </h6>
+                  <span className="capacidad-content">----</span>
               </div>
             </td>
           </tr>
@@ -114,7 +92,7 @@ const LabelPrinting = forwardRef((props, ref) => {
         <table className="container-table">
           <tr className="container-row">
             <td className="row7">
-              <div className="title" id="title-corrent">
+              <div className="title" id="title-refri">
                 <div className="container-info">
                   <span>REFRIGERANTE</span>
                   <span>REFRIGERANT</span>
@@ -133,9 +111,10 @@ const LabelPrinting = forwardRef((props, ref) => {
                 CORRIENTE - CURRENT (LRA)
               </div>
               <span className="content">
-                {Array.isArray(metadata) &&
+                ----
+                {/* {Array.isArray(metadata) &&
                   metadata.find((obj) => obj.ID_CARACTMATERIAL === 4)
-                    ?.DE_VALORCARACTMAT}
+                    ?.DE_VALORCARACTMAT} */}
               </span>
             </td>
             <td className="row7">
@@ -146,9 +125,10 @@ const LabelPrinting = forwardRef((props, ref) => {
                 </div>
                 <div className="content">
                   <span>
-                    {Array.isArray(metadata) &&
+                    No Oil Charged
+                    {/* {Array.isArray(metadata) &&
                       metadata.find((obj) => obj.ID_CARACTMATERIAL === 120)
-                        ?.DE_VALORCARACTMAT}
+                        ?.DE_VALORCARACTMAT} */}
                   </span>
                 </div>
               </div>
@@ -184,9 +164,8 @@ const LabelPrinting = forwardRef((props, ref) => {
                   <span>{qrValue.slice(qrValue.length - 8)}</span>
                 </div>
                 <span className="made-country">
-                  HECHO <br />
-                  MANUFACTURING <br />
-                  APODACA-NL MADE IN MEXICO
+                  ENSAMBLADO EN MÉXICO CON COMPONENTES EXTRANJEROS <br />
+                  ASSEMBLED IN MEXICO WITH FOREIGN COMPONENTS
                 </span>
               </div>
               <div>

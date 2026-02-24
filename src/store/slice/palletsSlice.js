@@ -217,7 +217,7 @@ export const getCompressor = (condenserSerial) => async (dispatch) => {
 export const createPallet =
   (order, barcode, product, quantity) => (dispatch) => {
     const palletData = {
-      workstation: "MXCDU01",
+      workstation: "MXSG002",
       order: order,
       identifier: barcode,
       product: product,
@@ -331,7 +331,7 @@ export const getLogs = () => (dispatch) => {
   // dispatch(addEvent(startFetchOrders));
   axios
     .get(
-      `http://10.13.225.20:8002/api/v1/paletization/logs/?workstation=MXCDU01&page=1&page_size=10`
+      `http://10.13.225.20:8002/api/v1/paletization/logs/?workstation=MXSG002&page=1&page_size=10`
     )
     .then((response) => {
       if (response.status === 200) {
@@ -347,11 +347,14 @@ export const getLogs = () => (dispatch) => {
 
 export const reprocessPallet = (palletIdentifier) => (dispatch) => {
   // Realiza una solicitud DELETE para desmontar el componente
+  console.log("Empezando a reprocesar el pallet")
   const data = {
     pallet: palletIdentifier,
   };
+  console.log(data)
   axios
     .post(`http://10.13.225.20:8002/api/v1/paletization/reprocess/`, data)
+    
     .then((response) => {
       if (response.status === 200) {
         dispatch(setLoadingProcessInSap(false));
@@ -400,16 +403,15 @@ export const processInSAP =
         matfi: component.compressor_material_code,
         tipo: "S",
       }));
-
     const xmlData = {
-      IArbpl: "MXCDU01",
+      IArbpl: "MXSG002",
       IAufnr: orderSelected.aufnr,
       IMatnrDestino: orderSelected.matnr.slice(-9),
       ICharg: pallet.identifier,
       IDataProd: currentDate,
       IHoraProd: currentTime,
       IQuantProd: ItJsonInst.length,
-      INumin: "F",
+      INumin: "6",
       ItJsonInst: ItJsonInst,
     };
     console.log(xmlData);

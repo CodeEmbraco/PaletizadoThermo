@@ -18,14 +18,16 @@ function LogsItem(props) {
   const [isLoading, setIsloading] = useState(false);
 
   const handleDispatch = async () => {
-    setIsLoading(true);
+    console.log("PRUEBA 1")
+    setIsloading(true);
+    console.log("PRUEBA 2")
     try {
       await dispatch(reprocessPallet(props.identifier));
     } catch (error) {
       // Maneja los errores aquí si es necesario
       console.log("Error al reprocesar el lote: " + error);
     }
-    setIsLoading(false);
+    setIsloading(false);
   };
 
   const handleReprocess = () => {
@@ -33,7 +35,7 @@ function LogsItem(props) {
     setIsloading(true);
     handleDispatch();
     setTimeout(() => {
-      props.fetchPallets();
+      props.fetchPallets('&workstation=MXSG002');
     }, 5000);
    
     //dispatch(unmountComponent(props));
@@ -157,11 +159,16 @@ function LogsItem(props) {
           ) : (
             <button
               aria-controls="danger-modal"
+              disabled={props.mounted_components_count < props.quantity}
               onClick={(e) => {
                 e.stopPropagation();
                 setDangerModalOpen(true);
               }}
-              className="text-center font-semibold text-primary w-full"
+                className={`text-center font-semibold w-full ${
+                props.mounted_components_count < props.quantity
+                  ? "text-slate-400 cursor-not-allowed opacity-50"
+                  : "text-primary cursor-pointer"
+              }`}
             >
               Reprocesar
             </button>

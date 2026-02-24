@@ -55,6 +55,20 @@ export const getTestResults = (barcode) => async (dispatch) => {
         const data1 = await call(`http://em10vs0010.embraco.com:8001/api/v1/test-result?barcode=${barcode}`)
         const data2 = await call(`http://em10vs0010.embraco.com:8001/api/v1/test-result-daqsys?barcode=${barcode}`)
 
+         // Validaciones
+        if (!data1?.results || data1.results.length === 0) {
+            alert("Falta la prueba del servicio TEST-RESULT");
+            dispatch(setTestResults([...data1.results, ...data2.results]))
+            dispatch(setGlobalStatus(defineGlobalStatus(0, data2.global_status)))
+            return;
+        }
+
+        if (!data2?.results || data2.results.length === 0) {
+            alert("Falta la prueba del servicio DAQSYS");
+            dispatch(setTestResults([...data1.results, ...data2.results]))
+            dispatch(setGlobalStatus(defineGlobalStatus(data1.global_status, 0)))
+            return;
+        }
         console.log({ data1, data2 })
 
         dispatch(setTestResults([...data1.results, ...data2.results]))
