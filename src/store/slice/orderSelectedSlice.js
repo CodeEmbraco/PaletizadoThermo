@@ -7,6 +7,7 @@ const initialState = {
   orderSelected: {},
   metadataOrderSelected: [],
   palletAmount: 0,
+  differentOrderSelected: null,
 };
 
 const orderSelectedSlice = createSlice({
@@ -23,35 +24,43 @@ const orderSelectedSlice = createSlice({
     setPalletAmount: (state, action) => {
       state.palletAmount = action.payload;
     },
+    setDifferentOrderSelected: (state, action) => {
+      state.differentOrderSelected = action.payload;
+    },
   },
 });
 
-export const { setOrderSelected, setMetadataOrderSelected, setPalletAmount } =
-  orderSelectedSlice.actions;
+export const {
+  setOrderSelected,
+  setMetadataOrderSelected,
+  setPalletAmount,
+  setDifferentOrderSelected,
+} = orderSelectedSlice.actions;
 
 export const selectOrderSelected = (state) => state.orderSelected.orderSelected;
 export const metadataOrderSelected = (state) =>
   state.orderSelected.metadataOrderSelected;
 export const palletAmount = (state) => state.orderSelected.palletAmount;
+export const differentOrderSelected = (state) => state.orderSelected.differentOrderSelected;
 
 export const getMetadataFromOrder = (idMaterial) => (dispatch) => {
   axios
     .get(
-      `http://10.13.225.20:8001/api/v1/material-metadata?id_material=${idMaterial}`
+      `http://10.13.225.20:8001/api/v1/material-metadata?id_material=${idMaterial}`,
     )
     .then((response) => {
       if (response.status === 200) {
         const desiredCaractIDs = [
-          151, 119, 3, 4, 119, 118, 1, 120, 181, 115, 185, 299
+          151, 119, 3, 4, 119, 118, 1, 120, 181, 115, 185, 299,
         ];
         const selecteCaract = response.data.filter((obj) =>
-          desiredCaractIDs.includes(obj.ID_CARACTMATERIAL)
+          desiredCaractIDs.includes(obj.ID_CARACTMATERIAL),
         );
         console.log(selecteCaract);
         dispatch(setMetadataOrderSelected(selecteCaract));
         if (selecteCaract.length > 0) {
           const palletAmount = selecteCaract.find(
-            (obj) => obj.ID_CARACTMATERIAL === 185
+            (obj) => obj.ID_CARACTMATERIAL === 185,
           )?.DE_VALORCARACTMAT;
           dispatch(setPalletAmount(palletAmount));
         }
@@ -86,11 +95,11 @@ export const getPalletSeriesFromSAP =
             "Content-Type": "application/json",
           },
           body: JSON.stringify(xmlData),
-        }
+        },
       );
 
       if (!response.ok) {
-        notifyError("Hubo un error recuperando la data de la orden")
+        notifyError("Hubo un error recuperando la data de la orden");
       }
 
       const data = await response.json();
@@ -106,5 +115,38 @@ export const getPalletSeriesFromSAP =
       console.error(error);
     }
   };
+
+export const getQRThermo = (serialNo) => (dispatch) => {
+  const data = {
+    serialNo: serialNo,
+  };
+  console.log("HDR Estoy en getQRThermo");
+  axios
+    .post(
+      "http://em10vs0010.embraco.com:8002/api/v1/paletization/thermo/get_qr/",
+      data,
+    )
+    .then((response) => {
+      if (response.status === 201) {
+        console.log("QR Thermo obtenido con exito:", response.data);
+
+        const orderLine = Array.isArray(response.data)
+          ? response.data.find((item) =>
+              typeof item === "string" && item.startsWith("Order:"),
+            )
+          : null;
+
+        if (orderLine) {
+          const orderValue = orderLine.split(":")[1]?.trim() || null;
+          if (orderValue) {
+            dispatch(setDifferentOrderSelected(orderValue));
+          }
+        }
+      } else if (response.status === 200) {
+        console.log("QR thermo no obtenido", response.data);
+      }
+    })
+    .catch((error) => endpointsCodes(error, dispatch, setNotFound));
+};
 
 export default orderSelectedSlice.reducer;

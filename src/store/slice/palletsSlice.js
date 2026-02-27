@@ -345,7 +345,7 @@ export const getLogs = () => (dispatch) => {
     .catch((error) => endpointsCodes(error, dispatch, setNotFound));
 };
 
-export const reprocessPallet = (palletIdentifier) => (dispatch) => {
+export const reprocessPallet = (palletIdentifier, orderNumber) => (dispatch) => {
   // Realiza una solicitud DELETE para desmontar el componente
   console.log("Empezando a reprocesar el pallet")
   const data = {
@@ -371,7 +371,7 @@ export const reprocessPallet = (palletIdentifier) => (dispatch) => {
           };
           dispatch(addEventToPaletizationLog(palletHasBeenNotified));
           dispatch(setPalletNotified({ ICharg: xmlData.ICharg }));
-          dispatch(getOrderDetail(orderSelected.aufnr));
+          dispatch(getOrderDetail(orderNumber));
         } else {
           dispatch(setLoadingProcessInSap(false));
           console.log("Error!");
@@ -387,7 +387,7 @@ export const reprocessPallet = (palletIdentifier) => (dispatch) => {
 };
 
 export const processInSAP =
-  (orderSelected, pallet, components) => (dispatch) => {
+  (orderSelected, pallet, components, effectiveOrder) => (dispatch) => {
     dispatch(setLoadingProcessInSap(true));
     const currentDatetime = new Date();
     const currentDate = currentDatetime.toISOString().split("T")[0];
@@ -405,7 +405,7 @@ export const processInSAP =
       }));
     const xmlData = {
       IArbpl: "MXSG002",
-      IAufnr: orderSelected.aufnr,
+      IAufnr: effectiveOrder,
       IMatnrDestino: orderSelected.matnr.slice(-9),
       ICharg: pallet.identifier,
       IDataProd: currentDate,

@@ -9,7 +9,10 @@ import {
 import { selectComponents, selectComponentsInOrderList, selectPallet } from "../../store/slice/palletsSlice";
 
 import ComponentsItem from "./ComponentsItem";
-import { selectOrderSelected } from "../../store/slice/orderSelectedSlice";
+import {
+  selectOrderSelected,
+  differentOrderSelected,
+} from "../../store/slice/orderSelectedSlice";
 
 function ComponentsTable() {
   const orders = [
@@ -57,6 +60,8 @@ function ComponentsTable() {
   const componentsList = useSelector(selectComponentsInOrderList);
 
   const orderSelected = useSelector(selectOrderSelected);
+  const overrideOrder = useSelector(differentOrderSelected);
+  const effectiveOrder = overrideOrder ?? orderSelected?.aufnr;
 
   useEffect(() => {
     setList(componentsList);
@@ -95,8 +100,8 @@ function ComponentsTable() {
             {Array.isArray(componentsList) ? componentsList.length : "0"}
           </span>
           <p className="text-left font-medium text-gray">
-          {orderSelected.aufnr
-            ? `Órden: ${orderSelected.aufnr}`
+          {effectiveOrder
+            ? `Órden: ${effectiveOrder}`
             : "No se ha seleccionado una órden"}
         </p>
         </h2>

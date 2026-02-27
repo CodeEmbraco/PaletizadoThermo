@@ -27,6 +27,8 @@ import {
   palletAmount,
   selectOrderSelected,
   setPalletAmount,
+  differentOrderSelected,
+  getQRThermo,
 } from "../store/slice/orderSelectedSlice";
 
 import ComponentsTable from "../partials/paletization/ComponentsTable";
@@ -83,9 +85,12 @@ function PaletizationView() {
   const testResultsList = useSelector(selectTestResults);
   const globalStatus = useSelector(selectGlobalStatus);
   const orderSelected = useSelector(selectOrderSelected);
+  const overrideOrder = useSelector(differentOrderSelected);
   const metadata = useSelector(metadataOrderSelected);
   const palletamount = useSelector(palletAmount);
   const paletizationLog = useSelector(selectPaletizationLog);
+
+  const effectiveOrder = overrideOrder ?? orderSelected?.aufnr;
 
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [isEditingPalletAmount, setIsEditingPalletAmount] = useState(false);
@@ -120,16 +125,18 @@ function PaletizationView() {
       }
 
       if (formattedCode.length >= 11) {
+        const upperCode = code.replace(/Shift/g, "").toUpperCase();
         const codeScannedEvent = {
           text:
-            "Producto escaneado: " + code.replace(/Shift/g, "").toUpperCase(),
+            "Producto escaneado: " + upperCode,
           timestamp: new Date().toISOString(),
         };
-        notifyProductScanned(code.replace(/Shift/g, "").toUpperCase());
-        setBarcodeProduct(code.replace(/Shift/g, "").toUpperCase());
+        notifyProductScanned(upperCode);
+        setBarcodeProduct(upperCode);
 
         dispatch(addEventToPaletizationLog(codeScannedEvent));
-        dispatch(getTestResults(code.replace(/Shift/g, "").toUpperCase()));
+        dispatch(getTestResults(upperCode));
+        dispatch(getQRThermo(upperCode));
         console.log("HDR Toy escaneando");
         console.log(barcodeProduct);
         const getTestResultsEvent = {
@@ -177,7 +184,7 @@ function PaletizationView() {
         console.log("HDR Toy escaneando pallet3 antes de create");
         dispatch(
           createPallet(
-            orderSelected.aufnr,
+            effectiveOrder,
             code.replace(/Shift/g, "").toUpperCase(),
             orderSelected.matnr.slice(-9),
             metadata.find((obj) => obj.ID_CARACTMATERIAL === 185)
@@ -282,7 +289,7 @@ function PaletizationView() {
   }
 
   function handleNotify() {
-    dispatch(processInSAP(orderSelected, palletSelected, componentsList));
+    dispatch(processInSAP(orderSelected, palletSelected, componentsList, effectiveOrder));
   }
 
   const handlePalletAmountDoubleClick = () => {
@@ -622,7 +629,7 @@ function PaletizationView() {
                         <p className="bg-white text-3xl font-bold text-black">
                           {Object.keys(orderSelected).length === 0
                             ? "Selecciona órden"
-                            : orderSelected.aufnr}
+                            : effectiveOrder}
                         </p>
                       </div>
                     </div>

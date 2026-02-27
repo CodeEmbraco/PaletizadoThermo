@@ -33,6 +33,7 @@ import { useSelector, useDispatch } from "react-redux";
 import {
   selectOrderSelected,
   metadataOrderSelected,
+  differentOrderSelected,
 } from "../store/slice/orderSelectedSlice";
 
 import {
@@ -70,11 +71,14 @@ function GenealogyDashboard() {
   const testResultsList = useSelector(selectTestResults);
   const globalStatus = useSelector(selectGlobalStatus);
   const orderSelected = useSelector(selectOrderSelected);
+  const overrideOrder = useSelector(differentOrderSelected);
   const metadata = useSelector(metadataOrderSelected);
   const genealogyLog = useSelector(selectGenealogyLog);
   const componentsJoined = useSelector(selectComponentsJoined);
   const componentsCount = useSelector(selectComponentsCount);
   const [infoModalOpen, setInfoModalOpen] = useState(false);
+
+  const effectiveOrder = overrideOrder ?? orderSelected?.aufnr;
 
   const [hasChildrenAssociated, setHasChildrenAssociated] = useState(false);
 
@@ -125,7 +129,7 @@ function GenealogyDashboard() {
   useEffect(() => {
     // Actualizar las etiquetas cuando orderSelected.aufnr cambie
     console.log("Cambió");
-    const newOrder = orderSelected.aufnr;
+    const newOrder = effectiveOrder;
     console.log(newOrder);
     //setChartData();
 
@@ -392,7 +396,7 @@ function GenealogyDashboard() {
   function handleConfirmUnion(e) {
     e.stopPropagation();
     const payload = {
-      order: orderSelected.aufnr,
+      order: effectiveOrder,
       condenser_unit_serial: barcodeCondenser,
       condenser_material_code: orderSelected.matnr.slice(-9),
       condenser_status_test: globalStatus === 1 ? true : false,
@@ -569,7 +573,7 @@ function GenealogyDashboard() {
                     <p className="bg-white text-3xl font-bold text-black">
                       {Object.keys(orderSelected).length === 0
                         ? "Selecciona órden"
-                        : orderSelected.aufnr}
+                        : effectiveOrder}
                     </p>
                   </div>
                 </div>
