@@ -127,7 +127,7 @@ export const getQRThermo = (serialNo) => (dispatch) => {
       data,
     )
     .then((response) => {
-      if (response.status === 201) {
+      if (response.status === 200) {
         console.log("QR Thermo obtenido con exito:", response.data);
 
         const orderLine = Array.isArray(response.data)
