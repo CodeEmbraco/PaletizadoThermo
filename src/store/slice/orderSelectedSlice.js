@@ -117,8 +117,10 @@ export const getPalletSeriesFromSAP =
   };
 
 export const getQRThermo = (serialNo) => (dispatch) => {
+  // 515380100826DHFI9 
+  // Tomamos solo los últimos 8 caracteres
   const data = {
-    serialNo: serialNo,
+    serialNo: serialNo.slice(-8),
   };
   console.log("HDR Estoy en getQRThermo");
   axios
