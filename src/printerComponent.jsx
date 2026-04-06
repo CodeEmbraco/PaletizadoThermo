@@ -288,7 +288,7 @@ export default function PrinterComponent({ barcodeProduct }) {
 
     ^FO300,700^A0R,25,25^FD${part_number}^FS
     ^FO240,700^A0R,25,25^FD${v_serialNo}^FS
-    ^FO180,700^A0R,25,25^FDA^FS
+    ^FO180,700^A0R,25,25^FDD^FS
     ^FO120,700^A0R,25,25^FD${currentDateZPL}^FS
 
     ; Agrega el código QR en la parte derecha
