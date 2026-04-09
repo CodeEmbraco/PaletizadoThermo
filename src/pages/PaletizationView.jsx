@@ -135,18 +135,22 @@ function PaletizationView() {
         setBarcodeProduct(upperCode);
 
         dispatch(addEventToPaletizationLog(codeScannedEvent));
-        dispatch(getTestResults(upperCode));
-        dispatch(getQRThermo(upperCode));
-        console.log("HDR Toy escaneando");
-        console.log(barcodeProduct);
         const getTestResultsEvent = {
           text:
             "Consultando resultados de prueba de producto: " +
             code.replace(/Shift/g, "").toUpperCase(),
           timestamp: new Date().toISOString(),
         };
-
         dispatch(addEventToPaletizationLog(getTestResultsEvent));
+
+        const testStatus = await Promise.resolve(dispatch(getTestResults(upperCode)));
+        dispatch(getQRThermo(upperCode));
+        console.log("HDR Toy escaneando, testStatus:", testStatus);
+
+        if (testStatus !== 1) {
+          return;
+        }
+
         const condenserMaterial = orderSelected.matnr.slice(-9);
         const compressorMaterial = orderSelected.components[0].matnr;
 
@@ -809,7 +813,7 @@ function PaletizationView() {
                   Semáforo
                 </h3>
                 <h3 className="bg-white text-2xl font-semibold text-black">
-                  {testResultsList && testResultsList.length > 0 ? (
+                  {globalStatus !== "" ? (
                     <div>
                       Estado global:{" "}
                       <span

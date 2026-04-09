@@ -58,23 +58,28 @@ export const getTestResults = (barcode) => async (dispatch) => {
          // Validaciones
         if (!data1?.results || data1.results.length === 0) {
             alert("Falta la prueba del servicio TEST-RESULT");
-            dispatch(setTestResults([...data1.results, ...data2.results]))
-            dispatch(setGlobalStatus(defineGlobalStatus(0, data2.global_status)))
-            return;
+            const status = defineGlobalStatus(0, data2.global_status);
+            dispatch(setTestResults([...(data1.results || []), ...(data2.results || [])]))
+            dispatch(setGlobalStatus(status))
+            return status;
         }
 
         if (!data2?.results || data2.results.length === 0) {
             alert("Falta la prueba del servicio DAQSYS");
-            dispatch(setTestResults([...data1.results, ...data2.results]))
-            dispatch(setGlobalStatus(defineGlobalStatus(data1.global_status, 0)))
-            return;
+            const status = defineGlobalStatus(data1.global_status, 0);
+            dispatch(setTestResults([...data1.results, ...(data2.results || [])]))
+            dispatch(setGlobalStatus(status))
+            return status;
         }
         console.log({ data1, data2 })
 
+        const status = defineGlobalStatus(data1.global_status, data2.global_status);
         dispatch(setTestResults([...data1.results, ...data2.results]))
-        dispatch(setGlobalStatus(defineGlobalStatus(data1.global_status, data2.global_status)))
+        dispatch(setGlobalStatus(status))
+        return status;
     } catch (error) {
         endpointsCodes(error, dispatch, setNotFound);
+        return 0;
     }
   };
   
