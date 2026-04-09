@@ -207,8 +207,13 @@ export default function PrinterComponent({ barcodeProduct }) {
       "http://em10vs0010.embraco.com:8002/api/v1/paletization/thermo/get_qr/",
       serialNo
     );
-    qr = JSON.stringify(response.data);
+    const parsedQr = JSON.parse(JSON.stringify(response.data));
+    const filteredQr = parsedQr.filter(item => !item.startsWith("Order:"));
+    qr = JSON.stringify(filteredQr);
     console.log(qr);
+    //
+
+    // ["CompressorSTG2 PN: 513805037...L","CompressorSTG2 SN: GC5VJGS7","CompressorSTG1 PN: 513805037...L","CompressorSTG1 SN: GC5VJGS8","Inverter1 PN: 519301201","Inverter1 SN: 5193012017794060247","Inverter2 PN: 519301201","Inverter2 SN: 5193012017794060244","Fan PN: 519700042F00P","Fan SN: 519700042G26NID2C","Captube PN: 15251677","Captube SN: 107160126","CE  PN: 215251070","CE  SN: 826OHIDJ","Order: 102759273","CDUAssembly PN: 515380100","CDUAssembly SN: 826OJJ0C","Captube Back Pressure: 105.0","Captube Flow: 40.3","Captube Length: 900.0"]
 
     //console.log("Error en la API:", error);
 
