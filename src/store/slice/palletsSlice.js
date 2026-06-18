@@ -345,16 +345,18 @@ export const getLogs = () => (dispatch) => {
     .catch((error) => endpointsCodes(error, dispatch, setNotFound));
 };
 
-export const reprocessPallet = (palletIdentifier, orderNumber) => (dispatch) => {
+export const reprocessPallet = (palletIdentifier, qty, orderNumber) => (dispatch) => {
   // Realiza una solicitud DELETE para desmontar el componente
   console.log("Empezando a reprocesar el pallet")
   const data = {
     pallet: palletIdentifier,
+    qty: qty,
+    interface: "6"
   };
   console.log(data)
-  axios
+  return axios
     .post(`http://10.13.225.20:8002/api/v1/paletization/reprocess/`, data)
-    
+
     .then((response) => {
       if (response.status === 200) {
         dispatch(setLoadingProcessInSap(false));
@@ -397,11 +399,15 @@ export const processInSAP =
     const ItJsonInst = components
       .filter((component) => !component.send_to_sap)
       .map((component) => ({
-        sernr: component.condenser_unit_serial.slice(-8),
-        serfi: component.compressor_unit_serial.slice(-8),
-        matnr: component.condenser_material_code,
-        matfi: component.compressor_material_code,
-        tipo: "S",
+        // Sernr ejemplo: 26011208145580578A 0100490
+        // Tomaremos los ultimos 8, quitandole el espacio. Resultado final: A0100490
+        sernr: component.condenser_unit_serial.replace(/\s+/g, "").slice(-18),
+        //serfi: component.condenser_unit_serial.slice(-9).replace(" ", ""),
+        matnr: orderSelected.matnr.slice(-9),
+        //matfi: component.compressor_material_code,
+        //tipo: "S", // Temporalmente deshabilitado.
+        // Sernr ejemplo: 26042008432380758A 100284
+        full_serial: component.condenser_unit_serial.replace(/\s+/g, "").slice(-18),
       }));
     const xmlData = {
       IArbpl: "MXSG002",
@@ -416,7 +422,7 @@ export const processInSAP =
     };
     console.log(xmlData);
 
-    axios
+    return axios
       .post(
         `http://10.13.225.20:8002/api/v1/paletization/pallets/sap/notifiy/`,
         xmlData
@@ -433,18 +439,21 @@ export const processInSAP =
             console.log("Notificación exitosa");
             notifySuccesInSAP(xmlData.ICharg, response.data.EMessage);
             dispatch(getAllComponents(pallet.identifier));
+            return { success: true };
           } else {
             dispatch(setLoadingProcessInSap(false));
             console.log("Error!");
             console.log(response.data.EMessage);
             notifyErrorInSAP(xmlData.ICharg, response.data.EMessage);
+            return { success: false };
           }
-        } else {
         }
+        return { success: false };
       })
       .catch((error) => {
         dispatch(setLoadingProcessInSap(false));
         console.log(error);
         notifyErrorInSAP(xmlData.ICharg, error.message);
+        return { success: false };
       });
   };

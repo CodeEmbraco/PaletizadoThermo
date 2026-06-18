@@ -47,28 +47,9 @@ function ComponentsItem(props) {
             {props.compMaterialCode}
           </div>
         </td>
-        <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
-          <div className="text-left text-md font-medium text-gray">
-            {props.compUnitSerial}
-          </div>
-        </td>
-        <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
-          <div className="text-center font-medium text-gray">
-            {props.sendToSAP === true ? (
-              <div className="flex">
-                <Verify className="mr-2" color="#009B4A" size={20} />
-                <p className="text-primary">{props.sapStatus}</p>
-              </div>
-            ) : (
-              <div className="flex text-center">
-                <Clock className="mr-2" color="gray" size={20} /> Pendiente
-              </div>
-            )}
-          </div>
-        </td>
         <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px">
           {/* Menu button */}
-          {props.sendToSAP ? null : (
+          {props.sendToSAP || palletSelected?.sap_attempted ? null : (
             <button
               aria-controls="danger-modal"
               onClick={(e) => {

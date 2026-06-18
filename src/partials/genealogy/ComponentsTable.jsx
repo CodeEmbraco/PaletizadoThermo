@@ -127,11 +127,6 @@ function ComponentsTable() {
                     Código de mat. (Compresor)
                   </div>
                 </th>
-                <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
-                  <div className="font-semibold text-left">
-                    Serial (Compresor)
-                  </div>
-                </th>
                 {/* <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
                   <div className="font-semibold text-center">Acciones</div>
                 </th> */}

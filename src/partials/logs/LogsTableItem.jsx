@@ -17,28 +17,16 @@ function LogsItem(props) {
   const palletSelected = useSelector(selectPallet);
   const [isLoading, setIsloading] = useState(false);
 
-  const handleDispatch = async () => {
-    console.log("PRUEBA 1")
+  const handleReprocess = async () => {
     setIsloading(true);
-    console.log("PRUEBA 2")
     try {
-      await dispatch(reprocessPallet(props.identifier));
+      await dispatch(reprocessPallet(props.identifier, props.mounted_components_count));
+      await props.fetchPallets('&workstation=MXSG002');
     } catch (error) {
-      // Maneja los errores aquí si es necesario
       console.log("Error al reprocesar el lote: " + error);
+    } finally {
+      setIsloading(false);
     }
-    setIsloading(false);
-  };
-
-  const handleReprocess = () => {
-    // Llama a la acción para eliminar el componente por su id
-    setIsloading(true);
-    handleDispatch();
-    setTimeout(() => {
-      props.fetchPallets('&workstation=MXSG002');
-    }, 5000);
-   
-    //dispatch(unmountComponent(props));
   };
 
   // Función para formatear la fecha y hora
@@ -114,18 +102,8 @@ function LogsItem(props) {
           </div>
         </td>
         <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
-          <div className="text-center font-medium">
-            {props.sendToSAP === true && props.sapSuccess ? (
-              <div className="flex">
-                <Verify className="mr-2" color="#009B4A" size={20} />
-                <p className="text-primary">{props.sapStatus}</p>
-              </div>
-            ) : (
-              <div className="flex text-center">
-                <InfoCircle className="mr-2" color="gray" size={20} />
-                <p className="text-gray">{props.sapStatus}</p>
-              </div>
-            )}
+          <div className="text-center text-md font-medium">
+            {props.sapStatus || '-'}
           </div>
         </td>
         <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px">
@@ -189,10 +167,8 @@ function LogsItem(props) {
           <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap"><div className="font-medium">No.</div></th>
           <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap"><div className="font-medium">Condensador (Serial)</div></th>
           <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap"><div className="font-medium">Condensador (Material)</div></th>
-          <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap"><div className="font-medium">Compresor (Serial)</div></th>
           <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap"><div className="font-medium">Compresor (Material)</div></th>
           <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap"><div className="font-medium">Enviado a SAP</div></th>
-          <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap"><div className="font-medium">SAP Status</div></th>
         </tr>
       </thead>
       <tbody>
@@ -203,10 +179,8 @@ function LogsItem(props) {
             <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px font-medium text-gray">{rowNumber}</td>
             <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px font-medium text-gray">{component.condenser_unit_serial}</td>
             <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px font-medium text-gray">{component.condenser_material_code}</td>
-            <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px font-medium text-gray">{component.compressor_unit_serial}</td>
             <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px font-medium text-gray">{component.compressor_material_code}</td>
             <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px font-medium text-gray">{component.send_to_sap ? 'Si' : 'No'}</td>
-            <td className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap w-px font-medium text-gray">{component.sap_status}</td>
           </tr>
         )})}
       </tbody>

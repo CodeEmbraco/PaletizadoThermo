@@ -60,7 +60,7 @@ function DropdownProfile({ align }) {
         />
           <div className="flex items-center truncate bg-black">
             <span className="bg-black text-white font-semibold truncate ml-2 text-sm group-hover:text-hoverTextSidebar">
-              CDU Electrical Test
+              CDU TFS
             </span>
             {/* <svg
               className="w-3 h-3 shrink-0 ml-1 fill-current bg-black"

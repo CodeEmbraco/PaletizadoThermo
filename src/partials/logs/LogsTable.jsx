@@ -225,7 +225,7 @@ function LogsTable() {
                   </div>
                 </th>
                 <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
-                  <div className="font-semibold text-left">SAP Status</div>
+                  <div className="font-semibold text-center">SAP Status</div>
                 </th>
                 <th className="px-2 first:pl-5 last:pr-5 py-3 whitespace-nowrap">
                   <div className="font-semibold text-center">Acciones</div>

@@ -8,7 +8,7 @@ import {
   Health,
   Notepad2,
 } from "iconsax-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import BrowserPrintComponent from "../printerComponent";
 
 import Stepper from "@keyvaluesystems/react-vertical-stepper";
@@ -28,6 +28,7 @@ import {
   selectOrderSelected,
   setPalletAmount,
   differentOrderSelected,
+  setDifferentOrderSelected,
   getQRThermo,
 } from "../store/slice/orderSelectedSlice";
 
@@ -45,6 +46,7 @@ import {
   selectPallet,
   setComponents,
   setComponentsJoined,
+  setPallet,
 } from "../store/slice/palletsSlice";
 import {
   getTestResults,
@@ -55,9 +57,12 @@ import {
 } from "../store/slice/testResultSlice";
 
 import ModalBlank from "../components/ModalBlank";
+import CompressorMismatchModal from "../components/CompressorMismatchModal";
+import PalletProductMismatchModal from "../components/PalletProductMismatchModal";
 import {
   notifyError,
   notifyPalletScanned,
+  notifyPalletProductValidated,
   notifyProductScanned,
 } from "../partials/paletization/Toasts";
 
@@ -97,7 +102,27 @@ function PaletizationView() {
   const [editablePalletAmount, setEditablePalletAmount] = useState(32);
 
   const [barcodePallet, setBarcodePallet] = useState("Escanea pallet");
+  const [hasProcessed, setHasProcessed] = useState(false);
   const [barcodeProduct, setBarcodeProduct] = useState("Escanea producto");
+
+  // ── Validación de material del componente escaneado vs orden ──
+  const [mismatchOpen, setMismatchOpen] = useState(false);
+  const [mismatchInfo, setMismatchInfo] = useState({
+    expectedMaterial: "",
+    scannedSerial: "",
+    expectedPrefix: "",
+    scannedPrefix: "",
+  });
+
+  // ── Doble escaneo: pallet → código de producto del pallet → componentes ──
+  const [palletProductValidated, setPalletProductValidated] = useState(false);
+  const [isPalletCreating, setIsPalletCreating] = useState(false);
+  const [palletProductMismatchOpen, setPalletProductMismatchOpen] = useState(false);
+  const [palletProductMismatchInfo, setPalletProductMismatchInfo] = useState({
+    expectedProduct: "",
+    scannedProduct: "",
+  });
+
   const labelRef = useRef();
 
   const dispatch = useDispatch();
@@ -114,99 +139,226 @@ function PaletizationView() {
     setSelectedItems([...selectedItems]);
   };
 
-  useScanDetection({
-    onComplete: async (code) => {
-      console.log(code);
+  useEffect(() => {
+    if (palletamount) {
+      setEditablePalletAmount(palletamount);
+    }
+  }, [palletamount]);
 
-      const formattedCode = code.replace(/Shift/g, "");
-      if (componentsList.length != 0 && componentsList.length == palletamount) {
-        notifyError("Cantidad de pallet ya está completada");
+  // Desbloquear escaneos cuando la API confirma el pallet (identifier cambia).
+  // También resetea la validación de producto para el nuevo pallet.
+  useEffect(() => {
+    setHasProcessed(false);
+    setPalletProductValidated(false);
+    if (palletSelected?.identifier) {
+      setIsPalletCreating(false);
+      // Avisar si el pallet ya fue cerrado (sap_attempted = true)
+      if (palletSelected.sap_attempted) {
+        notifyError("Este pallet ya fue cerrado — no se pueden realizar nuevas acciones.");
+        dispatch(
+          addEventToPaletizationLog({
+            text: "Pallet cerrado cargado: " + palletSelected.identifier + " — acciones bloqueadas.",
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
+    }
+  }, [palletSelected?.identifier]);
+
+  // Derivados reactivos usados tanto en el handler como en el JSX
+  const hasPallet =
+    palletSelected?.identifier &&
+    palletSelected.identifier !== "undefined" &&
+    String(palletSelected.identifier).trim() !== "";
+  const expectedProductCode = (orderSelected?.matnr?.slice(-9) ?? "").toUpperCase();
+
+  // Cleanup al montar la vista: mismo comportamiento que "Nuevo".
+  // Se ejecuta cada vez que el usuario navega a /paletization
+  // (incluso al volver desde la vista de Logs).
+  useEffect(() => {
+    setBarcodePallet("Escanea pallet");
+    setBarcodeProduct("Escanea producto");
+    dispatch(setGlobalStatus(""));
+    dispatch(setTestResults([]));
+    dispatch(setComponentsJoined(false));
+    dispatch(setComponents([]));
+    dispatch(setPallet({}));
+    dispatch(setDifferentOrderSelected(null));
+    setHasProcessed(false);
+    setPalletProductValidated(false);
+    setIsPalletCreating(false);
+    setPalletProductMismatchOpen(false);
+    setPalletProductMismatchInfo({ expectedProduct: "", scannedProduct: "" });
+    setMismatchOpen(false);
+    setMismatchInfo({ expectedMaterial: "", scannedSerial: "", expectedPrefix: "", scannedPrefix: "" });
+    dispatch(
+      addEventToPaletizationLog({
+        text: "Vista iniciada. Estado reiniciado.",
+        timestamp: new Date().toISOString(),
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleScan = async (rawCode) => {
+    const formattedCode = rawCode.replace(/Shift/g, "");
+    const upperCode = formattedCode.toUpperCase();
+
+    // Límite de cantidad de pallet
+    if (componentsList.length !== 0 && componentsList.length == palletamount) {
+      notifyError("Cantidad de pallet ya está completada");
+      return;
+    }
+
+    // Bloquear mientras la API confirma el pallet recién escaneado
+    if (isPalletCreating) {
+      notifyError("Esperando confirmación del pallet, intenta de nuevo en un momento.");
+      return;
+    }
+
+    // ── Pallet cerrado: bloquear cualquier acción ──
+    if (hasPallet && palletSelected?.sap_attempted) {
+      notifyError("Este pallet ya fue cerrado. Escanea un nuevo pallet.");
+      return;
+    }
+
+    // ── Estado intermedio: pallet confirmado, producto del pallet sin validar ──
+    // El siguiente escaneo corto se interpreta como el código de producto del pallet.
+    if (hasPallet && !palletProductValidated) {
+      if (formattedCode.length >= 11) {
+        notifyError("Escanea primero el código de producto del pallet antes de montar un componente");
+        dispatch(
+          addEventToPaletizationLog({
+            text: "Intento de montar componente sin validar producto del pallet: " + upperCode,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return;
+      }
+      if (upperCode === expectedProductCode) {
+        setPalletProductValidated(true);
+        notifyPalletProductValidated(upperCode);
+        dispatch(
+          addEventToPaletizationLog({
+            text: "Producto del pallet validado: " + upperCode,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return;
+      }
+      // Código no coincide con el producto de la orden
+      setPalletProductMismatchInfo({
+        expectedProduct: expectedProductCode,
+        scannedProduct: upperCode,
+      });
+      setPalletProductMismatchOpen(true);
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Producto del pallet RECHAZADO. Esperado: " +
+            expectedProductCode +
+            " | Escaneado: " +
+            upperCode,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+
+    // ── Scan largo: componente ──
+    if (formattedCode.length >= 11) {
+      if (!hasPallet) {
+        notifyError("Escanea primero el pallet antes de montar un componente");
+        dispatch(
+          addEventToPaletizationLog({
+            text: "Intento de montar componente sin pallet escaneado: " + upperCode,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return;
+      }
+      notifyProductScanned(upperCode);
+      setBarcodeProduct(upperCode);
+      dispatch(addEventToPaletizationLog({ text: "Producto escaneado: " + upperCode, timestamp: new Date().toISOString() }));
+      dispatch(addEventToPaletizationLog({ text: "Consultando resultados de prueba de producto: " + upperCode, timestamp: new Date().toISOString() }));
+
+      const testStatus = await Promise.resolve(dispatch(getTestResults(upperCode)));
+      dispatch(getQRThermo(upperCode));
+
+      if (testStatus !== 1) {
         return;
       }
 
-      if (formattedCode.length >= 11) {
-        const upperCode = code.replace(/Shift/g, "").toUpperCase();
-        const codeScannedEvent = {
-          text:
-            "Producto escaneado: " + upperCode,
-          timestamp: new Date().toISOString(),
-        };
-        notifyProductScanned(upperCode);
-        setBarcodeProduct(upperCode);
+      const condenserMaterial = orderSelected.matnr.slice(-9);
 
-        dispatch(addEventToPaletizationLog(codeScannedEvent));
-        const getTestResultsEvent = {
-          text:
-            "Consultando resultados de prueba de producto: " +
-            code.replace(/Shift/g, "").toUpperCase(),
-          timestamp: new Date().toISOString(),
-        };
-        dispatch(addEventToPaletizationLog(getTestResultsEvent));
+      // Validar que el serial escaneado corresponda al material de la orden.
+      // No se necesita genealogía: el serial del condensador comienza con el código de material.
+      const cleaned = condenserMaterial.replace(/^0+/, "");
+      const dotIdx = cleaned.search(/[.…]/);
+      const expectedPrefix =
+        dotIdx > 0 ? cleaned.slice(0, dotIdx) : cleaned.slice(-9).slice(0, 7);
+      const scannedPrefix = upperCode.slice(0, expectedPrefix.length);
 
-        const testStatus = await Promise.resolve(dispatch(getTestResults(upperCode)));
-        dispatch(getQRThermo(upperCode));
-        console.log("HDR Toy escaneando, testStatus:", testStatus);
-
-        if (testStatus !== 1) {
-          return;
-        }
-
-        const condenserMaterial = orderSelected.matnr.slice(-9);
-        const compressorMaterial = orderSelected.components[0].matnr;
-
-        const data = {
-          palette: palletSelected.identifier,
-          condenser: code.replace(/Shift/g, "").toUpperCase(),
-          compressor: "-", //response.compressor_unit_serial,
-          compressorMaterial: compressorMaterial,
-          condenserMaterial: condenserMaterial,
-        };
-        console.log(data);
-        dispatch(mountComponent(data));
-        dispatch(getMetadataFromOrder(condenserMaterial));
-      } else {
-        handleNew();
-        console.log("HDR Toy escaneando pallet");
-        // Si la cadena es más corta, considerarla un ID de pallet
-        const codeScannedEvent = {
-          text: "Pallet escaneado: " + code.replace(/Shift/g, "").toUpperCase(),
-          timestamp: new Date().toISOString(),
-        };
-        setBarcodePallet(code.replace(/Shift/g, "").toUpperCase());
-        dispatch(addEventToPaletizationLog(codeScannedEvent));
-        console.log("HDR Toy escaneando pallet2");
-        if (
-          metadata.length > 0 &&
-          metadata.find((obj) => obj.ID_CARACTMATERIAL === 185)
-            ?.DE_VALORCARACTMAT == componentsList.length
-        ) {
-          notifyError(
-            "El total de montados no debe superar la cantidad por pallet"
-          );
-          return;
-        }
-        console.log("HDR Toy escaneando pallet3 antes de create");
+      if (expectedPrefix && scannedPrefix && expectedPrefix !== scannedPrefix) {
+        setMismatchInfo({
+          expectedMaterial: cleaned,
+          scannedSerial: upperCode,
+          expectedPrefix,
+          scannedPrefix,
+        });
+        setMismatchOpen(true);
         dispatch(
-          createPallet(
-            effectiveOrder,
-            code.replace(/Shift/g, "").toUpperCase(),
-            orderSelected.matnr.slice(-9),
-            metadata.find((obj) => obj.ID_CARACTMATERIAL === 185)
-              ?.DE_VALORCARACTMAT
-          )
+          addEventToPaletizationLog({
+            text:
+              "Componente RECHAZADO — material no coincide con la orden. " +
+              "Esperado: " + expectedPrefix +
+              " | Escaneado: " + scannedPrefix +
+              " (" + upperCode + ")",
+            timestamp: new Date().toISOString(),
+          })
         );
-
-        const createPalletEvent = {
-          text:
-            "Consultando registro de Pallet: " +
-            code.replace(/Shift/g, "").toUpperCase(),
-          timestamp: new Date().toISOString(),
-        };
-        notifyPalletScanned(code.replace(/Shift/g, "").toUpperCase());
-
-        dispatch(addEventToPaletizationLog(createPalletEvent));
+        return;
       }
-    },
+
+      const compressorMaterial = orderSelected.components[0].matnr;
+      const data = {
+        palette: palletSelected.identifier,
+        condenser: upperCode,
+        compressor: "-",
+        compressorMaterial: compressorMaterial,
+        condenserMaterial: condenserMaterial,
+      };
+      dispatch(mountComponent(data));
+      dispatch(getMetadataFromOrder(condenserMaterial));
+    } else {
+      // ── Scan corto: nuevo pallet ──
+      handleNew();
+      setBarcodePallet(upperCode);
+      setIsPalletCreating(true);
+      dispatch(addEventToPaletizationLog({ text: "Pallet escaneado: " + upperCode, timestamp: new Date().toISOString() }));
+      if (
+        metadata.length > 0 &&
+        metadata.find((obj) => obj.ID_CARACTMATERIAL === 185)?.DE_VALORCARACTMAT == componentsList.length
+      ) {
+        notifyError("El total de montados no debe superar la cantidad por pallet");
+        setIsPalletCreating(false);
+        return;
+      }
+      dispatch(
+        createPallet(
+          effectiveOrder,
+          upperCode,
+          orderSelected.matnr.slice(-9),
+          metadata.find((obj) => obj.ID_CARACTMATERIAL === 185)?.DE_VALORCARACTMAT
+        )
+      );
+      notifyPalletScanned(upperCode);
+      dispatch(addEventToPaletizationLog({ text: "Consultando registro de Pallet: " + upperCode, timestamp: new Date().toISOString() }));
+    }
+  };
+
+  useScanDetection({
+    onComplete: (code) => handleScan(code),
   });
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -278,22 +430,41 @@ function PaletizationView() {
   // }, []);
 
   function handleNew() {
-    console.log("Handle new step");
     setBarcodePallet("Escanea pallet");
     setBarcodeProduct("Escanea producto");
     dispatch(setGlobalStatus(""));
     dispatch(setTestResults([]));
     dispatch(setComponentsJoined(false));
     dispatch(setComponents([]));
-    const handleNewEvent = {
+    dispatch(setPallet({}));
+    dispatch(setDifferentOrderSelected(null));
+    setHasProcessed(false);
+    setPalletProductValidated(false);
+    setIsPalletCreating(false);
+    setPalletProductMismatchOpen(false);
+    setPalletProductMismatchInfo({ expectedProduct: "", scannedProduct: "" });
+    setMismatchOpen(false);
+    setMismatchInfo({ expectedMaterial: "", scannedSerial: "", expectedPrefix: "", scannedPrefix: "" });
+    dispatch(addEventToPaletizationLog({
       text: "Comando NUEVO detectado. Proceso reiniciado.",
       timestamp: new Date().toISOString(),
-    };
-    dispatch(addEventToPaletizationLog(handleNewEvent));
+    }));
   }
 
-  function handleNotify() {
-    dispatch(processInSAP(orderSelected, palletSelected, componentsList, effectiveOrder));
+  async function handleNotify() {
+    setHasProcessed(true);
+    const result = await dispatch(
+      processInSAP(orderSelected, palletSelected, componentsList, effectiveOrder)
+    );
+    if (result?.success) {
+      dispatch(
+        addEventToPaletizationLog({
+          text: "Pallet procesado en SAP. Limpiando vista para el siguiente.",
+          timestamp: new Date().toISOString(),
+        })
+      );
+      handleNew();
+    }
   }
 
   const handlePalletAmountDoubleClick = () => {
@@ -481,16 +652,23 @@ function PaletizationView() {
                         e.currentTarget.blur();
                       }}
                       className={
-                        // Si faltan componentes O ya están todos enviados a SAP, mostramos el estilo desactivado (gris/secundario)
-                        componentsList.length < editablePalletAmount || 
-                        !componentsList.some((component) => component.send_to_sap === false)
+                        // Bloqueado si: ya se procesó en sesión, faltan componentes,
+                        // no queda nada pendiente de enviar a SAP, o el pallet ya se intentó procesar (persistente).
+                        hasProcessed ||
+                        componentsList.length < editablePalletAmount ||
+                        !componentsList.some((component) => component.send_to_sap === false) ||
+                        palletSelected?.sap_attempted
                           ? "w-64 h-12 bg-secondary rounded text-slate-400 text-base flex justify-center cursor-not-allowed opacity-70"
                           : "w-64 h-12 bg-primary rounded text-white text-base flex justify-center hover:bg-green-500"
                       }
                       disabled={
-                        // El botón se bloquea si: Faltan componentes O NO hay nada pendiente por enviar a SAP
-                        componentsList.length < editablePalletAmount || 
-                        !componentsList.some((component) => component.send_to_sap === false)
+                        // El botón se bloquea si: ya se procesó en sesión, faltan componentes,
+                        // no queda nada pendiente de enviar a SAP, o el pallet ya se intentó procesar (persistente).
+                        // El reproceso se hace desde la pantalla de Logs.
+                        hasProcessed ||
+                        componentsList.length < editablePalletAmount ||
+                        !componentsList.some((component) => component.send_to_sap === false) ||
+                        palletSelected?.sap_attempted
                       }
                     >
                       <span className="bg-transparent my-auto text-white font-semibold">
@@ -611,6 +789,42 @@ function PaletizationView() {
                 </div>
               </section>
             </div>
+            {/* Banner: pallet cerrado */}
+            {hasPallet && palletSelected?.sap_attempted && (
+              <div className="bg-red-50 border-2 border-red-500 rounded-lg px-5 py-3 mb-4 flex items-center space-x-3">
+                <svg className="shrink-0 text-red-500 w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-11a7 7 0 100 14 7 7 0 000-14z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4" />
+                </svg>
+                <div>
+                  <p className="font-semibold text-red-800 text-sm">
+                    Pallet cerrado — ya fue procesado en SAP
+                  </p>
+                  <p className="text-xs text-red-700 mt-0.5">
+                    No se pueden realizar nuevas acciones. Escanea un nuevo pallet o reprocésalo desde Logs.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Banner: paso 2 — escanear código de producto del pallet */}
+            {hasPallet && !palletProductValidated && (
+              <div className="bg-amber-50 border-2 border-amber-400 rounded-lg px-5 py-3 mb-4 flex items-center space-x-3">
+                <svg className="shrink-0 text-amber-500 w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <div>
+                  <p className="font-semibold text-amber-800 text-sm">
+                    Paso 2: Escanea el código de producto impreso en el pallet
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Código esperado:&nbsp;
+                    <span className="font-mono font-bold">{expectedProductCode}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="sm:flex sm:space-x-4">
               <div
                 className="flex flex-col w-1/3"
@@ -777,6 +991,22 @@ function PaletizationView() {
           </div>
         </div>
       </div>
+
+      <CompressorMismatchModal
+        open={mismatchOpen}
+        onClose={() => setMismatchOpen(false)}
+        expectedMaterial={mismatchInfo.expectedMaterial}
+        scannedSerial={mismatchInfo.scannedSerial}
+        expectedPrefix={mismatchInfo.expectedPrefix}
+        scannedPrefix={mismatchInfo.scannedPrefix}
+      />
+
+      <PalletProductMismatchModal
+        open={palletProductMismatchOpen}
+        onClose={() => setPalletProductMismatchOpen(false)}
+        expectedProduct={palletProductMismatchInfo.expectedProduct}
+        scannedProduct={palletProductMismatchInfo.scannedProduct}
+      />
 
       <ModalBlank
         id="info-modal"
