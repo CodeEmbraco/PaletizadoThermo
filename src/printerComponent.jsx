@@ -191,6 +191,14 @@ export default function PrinterComponent({ barcodeProduct }) {
     console.log("HDR handlePrintQRThermo1");
     let part_number = barcodeProduct.slice(0, 9);
     //const barcodeProduct_pp = useSelector(barcodeProduct);
+    // Revision Label en funcion del part number
+    let revision_label = "";
+    if (part_number === "515380130") {
+      revision_label = "A";
+    } else if (part_number === "515380100") {
+      revision_label = "D";
+    }
+    console.log("revision_label", revision_label);
     console.log({ barcodeProduct });
     let qr = "Hola";
     let format_qr= qr;
@@ -293,7 +301,7 @@ export default function PrinterComponent({ barcodeProduct }) {
 
     ^FO300,700^A0R,25,25^FD${part_number}^FS
     ^FO240,700^A0R,25,25^FD${v_serialNo}^FS
-    ^FO180,700^A0R,25,25^FDA^FS
+    ^FO180,700^A0R,25,25^FD${revision_label}^FS
     ^FO120,700^A0R,25,25^FD${currentDateZPL}^FS
 
     ; Agrega el código QR en la parte derecha
