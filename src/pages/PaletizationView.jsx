@@ -295,8 +295,11 @@ function PaletizationView() {
       // No se necesita genealogía: el serial del condensador comienza con el código de material.
       const cleaned = condenserMaterial.replace(/^0+/, "");
       const dotIdx = cleaned.search(/[.…]/);
-      const expectedPrefix =
-        dotIdx > 0 ? cleaned.slice(0, dotIdx) : cleaned.slice(-9).slice(0, 7);
+      // Comparar el material COMPLETO, no solo un prefijo: dos materiales que
+      // comparten los primeros dígitos pero difieren en los últimos (ej. ...130
+      // vs ...100) deben rechazarse. Si el material trae punto/elipsis se usa
+      // todo lo anterior al separador.
+      const expectedPrefix = dotIdx > 0 ? cleaned.slice(0, dotIdx) : cleaned;
       const scannedPrefix = upperCode.slice(0, expectedPrefix.length);
 
       if (expectedPrefix && scannedPrefix && expectedPrefix !== scannedPrefix) {
