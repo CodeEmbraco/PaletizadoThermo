@@ -332,6 +332,21 @@ function PaletizationView() {
       dispatch(getMetadataFromOrder(condenserMaterial));
     } else {
       // ── Scan corto: nuevo pallet ──
+      // Distinguir pallet vs material por FORMATO, no por longitud:
+      // el pallet SIEMPRE es alfanumérico (al menos una letra, ej. 826ZOP9),
+      // mientras que el número de material es 100% numérico (ej. 515380130).
+      // Si lo escaneado es puro número, es un material (o un fragmento de
+      // serial partido por el lector): NO debe crear un pallet.
+      if (!/[A-Z]/.test(upperCode)) {
+        notifyError("Eso parece un número de material, no un pallet. Escanea un pallet válido.");
+        dispatch(
+          addEventToPaletizationLog({
+            text: "Escaneo rechazado en creación de pallet (numérico, parece material): " + upperCode,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return;
+      }
       handleNew();
       setBarcodePallet(upperCode);
       setIsPalletCreating(true);
