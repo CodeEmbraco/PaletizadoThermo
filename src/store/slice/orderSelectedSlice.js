@@ -8,6 +8,7 @@ const initialState = {
   metadataOrderSelected: [],
   palletAmount: 0,
   differentOrderSelected: null,
+  qrGenealogy: [],
 };
 
 const orderSelectedSlice = createSlice({
@@ -27,6 +28,9 @@ const orderSelectedSlice = createSlice({
     setDifferentOrderSelected: (state, action) => {
       state.differentOrderSelected = action.payload;
     },
+    setQrGenealogy: (state, action) => {
+      state.qrGenealogy = action.payload;
+    },
   },
 });
 
@@ -35,6 +39,7 @@ export const {
   setMetadataOrderSelected,
   setPalletAmount,
   setDifferentOrderSelected,
+  setQrGenealogy,
 } = orderSelectedSlice.actions;
 
 export const selectOrderSelected = (state) => state.orderSelected.orderSelected;
@@ -42,6 +47,7 @@ export const metadataOrderSelected = (state) =>
   state.orderSelected.metadataOrderSelected;
 export const palletAmount = (state) => state.orderSelected.palletAmount;
 export const differentOrderSelected = (state) => state.orderSelected.differentOrderSelected;
+export const selectQrGenealogy = (state) => state.orderSelected.qrGenealogy;
 
 export const getMetadataFromOrder = (idMaterial) => (dispatch) => {
   axios
@@ -123,6 +129,7 @@ export const getQRThermo = (serialNo) => (dispatch) => {
     serialNo: serialNo.slice(-8),
   };
   console.log("HDR Estoy en getQRThermo");
+  dispatch(setQrGenealogy([]));
   axios
     .post(
       "http://em10vs0010.embraco.com:8002/api/v1/paletization/thermo/get_qr/",
@@ -131,6 +138,10 @@ export const getQRThermo = (serialNo) => (dispatch) => {
     .then((response) => {
       if (response.status === 200) {
         console.log("QR Thermo obtenido con exito:", response.data);
+
+        if (Array.isArray(response.data)) {
+          dispatch(setQrGenealogy(response.data));
+        }
 
         const orderLine = Array.isArray(response.data)
           ? response.data.find((item) =>

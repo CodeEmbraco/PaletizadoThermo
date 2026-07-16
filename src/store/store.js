@@ -45,4 +45,9 @@ const store = configureStore({
   },
 });
 
+// Solo en dev: permite inspeccionar/despachar desde la consola del navegador.
+if (import.meta.env.DEV) {
+  window.__store = store;
+}
+
 export default store;

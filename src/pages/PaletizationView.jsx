@@ -30,9 +30,11 @@ import {
   differentOrderSelected,
   setDifferentOrderSelected,
   getQRThermo,
+  setQrGenealogy,
 } from "../store/slice/orderSelectedSlice";
 
 import ComponentsTable from "../partials/paletization/ComponentsTable";
+import GenealogyChecklist from "../partials/paletization/GenealogyChecklist";
 import {
   addEventToPaletizationLog,
   selectPaletizationLog,
@@ -125,6 +127,10 @@ function PaletizationView() {
 
   const labelRef = useRef();
 
+  // Montaje pendiente de inspección visual: se llena al validar el escaneo
+  // y solo se ejecuta cuando el checklist de genealogía termina todo en OK.
+  const pendingMountRef = useRef(null);
+
   const dispatch = useDispatch();
 
   const [selectedItems, setSelectedItems] = useState([]);
@@ -184,6 +190,8 @@ function PaletizationView() {
     dispatch(setComponents([]));
     dispatch(setPallet({}));
     dispatch(setDifferentOrderSelected(null));
+    dispatch(setQrGenealogy([]));
+    pendingMountRef.current = null;
     setHasProcessed(false);
     setPalletProductValidated(false);
     setIsPalletCreating(false);
@@ -331,8 +339,18 @@ function PaletizationView() {
         compressorMaterial: compressorMaterial,
         condenserMaterial: condenserMaterial,
       };
-      dispatch(mountComponent(data));
-      dispatch(getMetadataFromOrder(condenserMaterial));
+      // La pieza NO se monta aquí: queda pendiente hasta que el operador
+      // complete la inspección visual de genealogía con todos los renglones en OK.
+      pendingMountRef.current = { data, condenserMaterial };
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Componente validado: " +
+            upperCode +
+            ". Esperando inspección visual (checklist) para montar.",
+          timestamp: new Date().toISOString(),
+        })
+      );
     } else {
       // ── Scan corto: nuevo pallet ──
       // Distinguir pallet vs material por FORMATO, no por longitud:
@@ -447,6 +465,40 @@ function PaletizationView() {
 
   // }, []);
 
+  // Se dispara una sola vez cuando el operador marca el último renglón del checklist.
+  const handleInspectionComplete = ({ allOk, nokCount }) => {
+    const pending = pendingMountRef.current;
+    if (!allOk) {
+      pendingMountRef.current = null;
+      notifyError("Inspección visual con errores: la pieza no se puede montar");
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Componente RECHAZADO en inspección visual (" +
+            nokCount +
+            " con ERROR)" +
+            (pending ? ": " + pending.data.condenser : ""),
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+    if (!pending) {
+      return;
+    }
+    pendingMountRef.current = null;
+    dispatch(
+      addEventToPaletizationLog({
+        text:
+          "Inspección visual completa (todo OK). Montando componente: " +
+          pending.data.condenser,
+        timestamp: new Date().toISOString(),
+      })
+    );
+    dispatch(mountComponent(pending.data));
+    dispatch(getMetadataFromOrder(pending.condenserMaterial));
+  };
+
   function handleNew() {
     setBarcodePallet("Escanea pallet");
     setBarcodeProduct("Escanea producto");
@@ -456,6 +508,8 @@ function PaletizationView() {
     dispatch(setComponents([]));
     dispatch(setPallet({}));
     dispatch(setDifferentOrderSelected(null));
+    dispatch(setQrGenealogy([]));
+    pendingMountRef.current = null;
     setHasProcessed(false);
     setPalletProductValidated(false);
     setIsPalletCreating(false);
@@ -606,7 +660,7 @@ function PaletizationView() {
                         size={20}
                       />
                       <span className="my-auto text-black font-semibold">
-                        Nuevo
+                        NUEVO
                       </span>
                     </button>
                   )}
@@ -977,10 +1031,11 @@ function PaletizationView() {
           </div>
 
           <div className="sm:flex sm:space-x-4 mt-4">
-            <section
-              style={{ height: "245px", overflowY: "scroll" }}
-              className="inline-block align-bottom rounded-lg border border-slate-200 text-left mb-4 w-full sm:w-1/3 sm:my-4"
-            >
+            <div className="w-full sm:w-1/3">
+              <section
+                style={{ height: "245px", overflowY: "scroll" }}
+                className="inline-block align-bottom rounded-lg border border-slate-200 text-left mb-4 w-full sm:my-4"
+              >
               <div className="bg-white p-5">
                 <h3 className="bg-white text-md font-medium text-gray">
                   Log de eventos
@@ -1005,7 +1060,10 @@ function PaletizationView() {
                     ))}
                 </div>
               </div>
-            </section>
+              </section>
+            </div>
+
+            <GenealogyChecklist onComplete={handleInspectionComplete} />
           </div>
         </div>
       </div>
