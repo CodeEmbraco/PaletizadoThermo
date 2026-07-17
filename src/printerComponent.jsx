@@ -12,6 +12,7 @@ import { Print_Service } from "./printService";
 
 import { selectBarcodeProduct } from "./store/slice/productSlice";
 import { selectGlobalStatus } from "./store/slice/testResultSlice";
+import { fetchQrThermoLabel } from "./utils/qrThermoLabel";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -200,86 +201,12 @@ export default function PrinterComponent({ barcodeProduct }) {
     }
     console.log("revision_label", revision_label);
     console.log({ barcodeProduct });
-    let qr = "Hola";
-    let format_qr= qr;
     let v_serialNo = barcodeProduct.slice(9);
     console.log("serialNo", v_serialNo);
-    //v_serialNo = "8C5XHIGH";
-    const serialNo = {
-      serialNo: v_serialNo,
-    };
-
     let currentDateZPL = formatZPLDate(new Date(Date.now()));
 
-    const response = await axios.post(
-      "http://em10vs0010.embraco.com:8002/api/v1/paletization/thermo/get_qr/",
-      serialNo
-    );
-    const parsedQr = JSON.parse(JSON.stringify(response.data));
-    const filteredQr = parsedQr.filter(item => !item.startsWith("Order:"));
-    qr = JSON.stringify(filteredQr);
-    console.log(qr);
-    //
-
-    // ["CompressorSTG2 PN: 513805037...L","CompressorSTG2 SN: GC5VJGS7","CompressorSTG1 PN: 513805037...L","CompressorSTG1 SN: GC5VJGS8","Inverter1 PN: 519301201","Inverter1 SN: 5193012017794060247","Inverter2 PN: 519301201","Inverter2 SN: 5193012017794060244","Fan PN: 519700042F00P","Fan SN: 519700042G26NID2C","Captube PN: 15251677","Captube SN: 107160126","CE  PN: 215251070","CE  SN: 826OHIDJ","Order: 102759273","CDUAssembly PN: 515380100","CDUAssembly SN: 826OJJ0C","Captube Back Pressure: 105.0","Captube Flow: 40.3","Captube Length: 900.0"]
-
-    //console.log("Error en la API:", error);
-
-    console.log("HDR handlePrintQRThermo2..");
-    //axios
-    //  .post("http://localhost:9003/api/v1/paletization/thermo/get_qr/", serialNo)
-    //   .then((response) => {
-
-    //qr = JSON.stringify(response.data);
-
-
-    //format_qr = qr.translate(str.maketrans("", "", ',[]": '))
-    //qr = '["Compressor1 PN: 513805037...L","Compressor1 SN: JC5BPOIL","Compressor2 PN: 513805037...L","Compressor2 SN: JC5BPOJF","Inverter PN: 519301201","Inverter SN: 2154","Inverter PN: 519301201","Inverter SN: 2160","Fan PN: 517009997","Fan SN: AN7","Cold Box PN: 15251677","Cold Box SN: 001201125","RE  PN: 215251070","RE  SN: 8C5VLGH1","Assembly PN: 515380100","Assembly SN: 8C5XHIGH","ExpansionHub PN: 519501008","ExpansionHub SN: 001D","Captube Back Pressure: 105.0","Captube Flow: 40.8","Captube Length: 919.0"]';
-
-    let resultado = qr
-                    .replace(/[\[\]]/g, '')  // elimina [ y ]
-                    .replace(/"/g, ' ')      // reemplaza comillas
-                    .replace(/:/g, ',')      // reemplaza :
-                    .replace(/\.{3}L/g, '')   // elimina '...L' (tres puntos seguidos de L)
-                    .replace(/\s+/g, '') ;   // elimina espacios
-                
-
-    console.log(resultado);
-
-    format_qr = resultado
-    //format_qr = "".join(format_qr.split())
-
-    print(format_qr)
-    /*format_qr = qr.replace(",", "");  //Elimina las comas
-    format_qr = format_qr.replace("[","");
-    format_qr = format_qr.replace("]","");
-    format_qr = format_qr.replace(/"/g, "");
-    format_qr = format_qr.replace(":","");
-    format_qr = format_qr.replace(" ","");*/
+    const format_qr = await fetchQrThermoLabel(v_serialNo);
     console.log(format_qr);
-
-
-
-    //if (response.status === 201) {
-    //  console.log("QR Thermo obtenido con exito:", response.data);
-
-    // dispatch(setPallet(response.data));
-    //} else if (response.status === 200) {
-    //  console.log("QR thermo no obtenido", response.data);
-    //dispatch(setPallet(response.data));
-    //const palletIdentifier = response.data.identifier;
-    //console.log(palletIdentifier);
-    //dispatch(getAllComponents(palletIdentifier));
-    //}
-    //})
-    // .catch((error) => endpointsCodes(error, dispatch, setNotFound));
-    //console.log("selectedAccessories", selectedAccessories);
-    //const selectedAccessoriesJson = JSON.parse(selectedAccessories);
-    //if ( selectedAccessoriesJson == null )
-    //  alert("No es posible generar etiqueta de Accesorios, el producto no tiene relacion");
-    //else{
-    //console.log(selectedAccessoriesJson[0].matnr);
-    //let currentDateZPL = formatZPLDate(new Date(Date.now()));
 
     let networkCallResponse = `
    ^XA

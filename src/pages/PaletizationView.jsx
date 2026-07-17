@@ -61,12 +61,14 @@ import {
 import ModalBlank from "../components/ModalBlank";
 import CompressorMismatchModal from "../components/CompressorMismatchModal";
 import PalletProductMismatchModal from "../components/PalletProductMismatchModal";
+import QrLabelValidationModal from "../components/QrLabelValidationModal";
 import {
   notifyError,
   notifyPalletScanned,
   notifyPalletProductValidated,
   notifyProductScanned,
 } from "../partials/paletization/Toasts";
+import { fetchQrThermoLabel } from "../utils/qrThermoLabel";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -123,6 +125,15 @@ function PaletizationView() {
   const [palletProductMismatchInfo, setPalletProductMismatchInfo] = useState({
     expectedProduct: "",
     scannedProduct: "",
+  });
+
+  // ── Re-escaneo del QR ya impreso: detalle de la comparación contra el endpoint ──
+  const [qrValidationModal, setQrValidationModal] = useState({
+    open: false,
+    allOk: false,
+    serialNo: "",
+    rows: [],
+    errorMessage: "",
   });
 
   const labelRef = useRef();
@@ -208,8 +219,106 @@ function PaletizationView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Convierte el string aplanado "CAMPO1,VALOR1,CAMPO2,VALOR2,..." en pares
+  // ordenados campo→valor.
+  const parseQrPairs = (flatUpperString) => {
+    const tokens = flatUpperString.split(",");
+    const pairs = [];
+    for (let i = 0; i + 1 < tokens.length; i += 2) {
+      pairs.push([tokens[i], tokens[i + 1]]);
+    }
+    return pairs;
+  };
+
+  // Re-escaneo de la etiqueta QR ya impresa: compara, campo por campo, el
+  // contenido físico contra lo que trae el endpoint de genealogía en este
+  // momento, y muestra el detalle completo en un modal. La pistola lee el QR
+  // con mayúsculas/minúsculas inconsistentes (ej. "cOMPRESSORstg2pn",
+  // "519700042f00p"), así que toda la comparación se hace en mayúsculas para
+  // no confundir ruido del escáner con un error real.
+  const handleValidateQrLabel = async (scannedLabelRaw) => {
+    const scannedUpper = scannedLabelRaw.trim().toUpperCase();
+    const scannedPairs = parseQrPairs(scannedUpper);
+    const scannedMap = new Map(scannedPairs);
+    const serialNo = scannedMap.get("CDUASSEMBLYSN") || null;
+
+    if (!serialNo) {
+      setQrValidationModal({
+        open: true,
+        allOk: false,
+        serialNo: "",
+        rows: [],
+        errorMessage:
+          "No se pudo identificar el serial del CDU en el QR escaneado.",
+      });
+      dispatch(
+        addEventToPaletizationLog({
+          text: "Validación de QR impreso RECHAZADA: formato no reconocido.",
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+
+    try {
+      const expectedLabel = (await fetchQrThermoLabel(serialNo)).toUpperCase();
+      const expectedPairs = parseQrPairs(expectedLabel);
+
+      const seenFields = new Set();
+      const rows = expectedPairs.map(([field, expected]) => {
+        seenFields.add(field);
+        const scanned = scannedMap.has(field) ? scannedMap.get(field) : "(falta)";
+        return { field, expected, scanned, ok: scanned === expected };
+      });
+      scannedMap.forEach((scanned, field) => {
+        if (seenFields.has(field)) return;
+        rows.push({ field, expected: "(falta)", scanned, ok: false });
+      });
+
+      const allOk = rows.every((row) => row.ok);
+      setQrValidationModal({ open: true, allOk, serialNo, rows, errorMessage: "" });
+      dispatch(
+        addEventToPaletizationLog({
+          text: allOk
+            ? "QR impreso validado correctamente contra la genealogía actual: " + serialNo
+            : "QR impreso NO coincide con la genealogía actual: " + serialNo,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    } catch (error) {
+      setQrValidationModal({
+        open: true,
+        allOk: false,
+        serialNo,
+        rows: [],
+        errorMessage: "No se pudo validar el QR: error consultando la genealogía.",
+      });
+      dispatch(
+        addEventToPaletizationLog({
+          text: "Error validando QR impreso (" + serialNo + "): " + error.message,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  };
+
   const handleScan = async (rawCode) => {
-    const formattedCode = rawCode.replace(/Shift/g, "");
+    // use-scan-detection deja el literal "Enter"/"Escape" pegado al inicio
+    // del siguiente escaneo si dos escaneos caen a menos de 100ms uno del
+    // otro (residuo de su buffer interno tras el carácter de fin anterior).
+    const formattedCode = rawCode
+      .replace(/Shift/g, "")
+      .replace(/^(Enter|Escape)/, "");
+
+    // El QR impreso de la etiqueta Thermo, al escanearlo, trae el token
+    // "CDUAssemblySN" (la genealogía completa aplanada): si el operador
+    // reescanea la etiqueta ya impresa, se valida contra el endpoint en vez
+    // de tratarla como un escaneo de pallet/producto.
+    if (formattedCode.toUpperCase().includes("CDUASSEMBLYSN")) {
+      handleValidateQrLabel(formattedCode);
+      return;
+    }
+
     const upperCode = formattedCode.toUpperCase();
 
     // Límite de cantidad de pallet
@@ -1082,6 +1191,15 @@ function PaletizationView() {
         onClose={() => setPalletProductMismatchOpen(false)}
         expectedProduct={palletProductMismatchInfo.expectedProduct}
         scannedProduct={palletProductMismatchInfo.scannedProduct}
+      />
+
+      <QrLabelValidationModal
+        open={qrValidationModal.open}
+        onClose={() => setQrValidationModal((prev) => ({ ...prev, open: false }))}
+        allOk={qrValidationModal.allOk}
+        serialNo={qrValidationModal.serialNo}
+        rows={qrValidationModal.rows}
+        errorMessage={qrValidationModal.errorMessage}
       />
 
       <ModalBlank
