@@ -127,8 +127,8 @@ function PaletizationView() {
 
   const labelRef = useRef();
 
-  // Montaje pendiente de inspección visual: se llena al validar el escaneo
-  // y solo se ejecuta cuando el checklist de genealogía termina todo en OK.
+  // Montaje pendiente de validación: se llena al validar el escaneo
+  // y solo se ejecuta cuando la validación automática de genealogía da todo OK.
   const pendingMountRef = useRef(null);
 
   const dispatch = useDispatch();
@@ -339,15 +339,15 @@ function PaletizationView() {
         compressorMaterial: compressorMaterial,
         condenserMaterial: condenserMaterial,
       };
-      // La pieza NO se monta aquí: queda pendiente hasta que el operador
-      // complete la inspección visual de genealogía con todos los renglones en OK.
+      // La pieza NO se monta aquí: queda pendiente hasta que la validación
+      // automática de genealogía confirme que todos los componentes están OK.
       pendingMountRef.current = { data, condenserMaterial };
       dispatch(
         addEventToPaletizationLog({
           text:
             "Componente validado: " +
             upperCode +
-            ". Esperando inspección visual (checklist) para montar.",
+            ". Esperando validación automática de genealogía para montar.",
           timestamp: new Date().toISOString(),
         })
       );
@@ -465,16 +465,16 @@ function PaletizationView() {
 
   // }, []);
 
-  // Se dispara una sola vez cuando el operador marca el último renglón del checklist.
+  // Se dispara automáticamente en cuanto la genealogía escaneada se valida contra las reglas.
   const handleInspectionComplete = ({ allOk, nokCount }) => {
     const pending = pendingMountRef.current;
     if (!allOk) {
       pendingMountRef.current = null;
-      notifyError("Inspección visual con errores: la pieza no se puede montar");
+      notifyError("Validación de genealogía con errores: la pieza no se puede montar");
       dispatch(
         addEventToPaletizationLog({
           text:
-            "Componente RECHAZADO en inspección visual (" +
+            "Componente RECHAZADO en validación de genealogía (" +
             nokCount +
             " con ERROR)" +
             (pending ? ": " + pending.data.condenser : ""),
@@ -490,7 +490,7 @@ function PaletizationView() {
     dispatch(
       addEventToPaletizationLog({
         text:
-          "Inspección visual completa (todo OK). Montando componente: " +
+          "Validación de genealogía completa (todo OK). Montando componente: " +
           pending.data.condenser,
         timestamp: new Date().toISOString(),
       })
