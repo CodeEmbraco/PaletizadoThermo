@@ -197,7 +197,7 @@ export default function PrinterComponent({ barcodeProduct }) {
     if (part_number === "515380130") {
       revision_label = "A";
     } else if (part_number === "515380100") {
-      revision_label = "D";
+      revision_label = "E";
     }
     console.log("revision_label", revision_label);
     console.log({ barcodeProduct });
