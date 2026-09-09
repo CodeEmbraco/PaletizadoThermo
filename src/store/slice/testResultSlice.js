@@ -66,7 +66,7 @@ function defineGlobalStatus(...statuses) {
     return 1
 }
 
-// Pruebas del condensador/CDU escaneado: TEST-RESULT + DAQSYS.
+// Pruebas del condensador/CDU escaneado: PLIS-RESULT + DAQSYS.
 // La prueba de torque del FAN (ECMFAN) NO va aquí: el fan es un
 // componente aparte con su propio serial, y se valida justo antes de
 // montar con getFanTorqueResult (ver abajo).
@@ -77,7 +77,7 @@ export const getTestResults = (barcode) => async (dispatch) => {
 
          // Validaciones
         if (!data1?.results || data1.results.length === 0) {
-            alert("Falta la prueba del servicio TEST-RESULT");
+            alert("Falta la prueba del servicio PLIS-RESULT");
             const status = defineGlobalStatus(0, data2.global_status);
             dispatch(setTestResults([...(data1.results || []), ...(data2.results || [])]))
             dispatch(setGlobalStatus(status))

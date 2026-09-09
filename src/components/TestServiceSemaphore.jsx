@@ -1,5 +1,5 @@
 const TEST_SERVICE_LABELS = [
-  { key: "testResult", label: "TEST-RESULT" },
+  { key: "testResult", label: "PLIS-RESULT" },
   { key: "daqsys", label: "DAQSYS" },
   { key: "ecmfan", label: "ECMFAN (Torque)" },
 ];
