@@ -51,14 +51,18 @@ import {
   setPallet,
 } from "../store/slice/palletsSlice";
 import {
+  getFanTorqueResult,
   getTestResults,
   selectGlobalStatus,
+  selectServiceStatuses,
   selectTestResults,
   setGlobalStatus,
+  setServiceStatuses,
   setTestResults,
 } from "../store/slice/testResultSlice";
 
 import ModalBlank from "../components/ModalBlank";
+import TestServiceSemaphore from "../components/TestServiceSemaphore";
 import CompressorMismatchModal from "../components/CompressorMismatchModal";
 import PalletProductMismatchModal from "../components/PalletProductMismatchModal";
 import QrLabelValidationModal from "../components/QrLabelValidationModal";
@@ -93,6 +97,7 @@ const useStyles = makeStyles((theme) => ({
 function PaletizationView() {
   const testResultsList = useSelector(selectTestResults);
   const globalStatus = useSelector(selectGlobalStatus);
+  const serviceStatuses = useSelector(selectServiceStatuses);
   const orderSelected = useSelector(selectOrderSelected);
   const overrideOrder = useSelector(differentOrderSelected);
   const metadata = useSelector(metadataOrderSelected);
@@ -197,6 +202,7 @@ function PaletizationView() {
     setBarcodeProduct("Escanea producto");
     dispatch(setGlobalStatus(""));
     dispatch(setTestResults([]));
+    dispatch(setServiceStatuses({ testResult: null, daqsys: null, ecmfan: null }));
     dispatch(setComponentsJoined(false));
     dispatch(setComponents([]));
     dispatch(setPallet({}));
@@ -575,7 +581,7 @@ function PaletizationView() {
   // }, []);
 
   // Se dispara automáticamente en cuanto la genealogía escaneada se valida contra las reglas.
-  const handleInspectionComplete = ({ allOk, nokCount }) => {
+  const handleInspectionComplete = async ({ allOk, nokCount, fanSerial }) => {
     const pending = pendingMountRef.current;
     if (!allOk) {
       pendingMountRef.current = null;
@@ -595,6 +601,37 @@ function PaletizationView() {
     if (!pending) {
       return;
     }
+
+    if (!fanSerial) {
+      pendingMountRef.current = null;
+      notifyError("No se encontró el serial del fan en la genealogía: la pieza no se puede montar");
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Componente RECHAZADO: falta serial de Fan en la genealogía: " +
+            pending.data.condenser,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+
+    // Prueba de torque ECMFAN del fan, justo antes de montar.
+    const fanTorqueStatus = await Promise.resolve(dispatch(getFanTorqueResult(fanSerial)));
+    if (fanTorqueStatus !== 1) {
+      pendingMountRef.current = null;
+      notifyError("Prueba de torque ECMFAN del fan (" + fanSerial + ") no aprobada: la pieza no se puede montar");
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Componente RECHAZADO: torque de fan (" + fanSerial + ") no aprobado: " +
+            pending.data.condenser,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+
     pendingMountRef.current = null;
     dispatch(
       addEventToPaletizationLog({
@@ -613,6 +650,7 @@ function PaletizationView() {
     setBarcodeProduct("Escanea producto");
     dispatch(setGlobalStatus(""));
     dispatch(setTestResults([]));
+    dispatch(setServiceStatuses({ testResult: null, daqsys: null, ecmfan: null }));
     dispatch(setComponentsJoined(false));
     dispatch(setComponents([]));
     dispatch(setPallet({}));
@@ -1077,7 +1115,7 @@ function PaletizationView() {
                         >
                           {globalStatus === 1 ? "OK" : "Error"}
                         </span>
-                        {/* Muestra los detalles de los resultados de prueba aquí si es necesario */}
+                        <TestServiceSemaphore serviceStatuses={serviceStatuses} />
                       </div>
                     ) : (
                       <p className="text-black">
@@ -1247,7 +1285,7 @@ function PaletizationView() {
                       >
                         {globalStatus === 1 ? "OK" : "Error"}
                       </span>
-                      {/* Muestra los detalles de los resultados de prueba aquí si es necesario */}
+                      <TestServiceSemaphore serviceStatuses={serviceStatuses} />
                     </div>
                   ) : (
                     <p className="text-black">

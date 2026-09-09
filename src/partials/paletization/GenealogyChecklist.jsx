@@ -220,7 +220,8 @@ export default function GenealogyChecklist({ onComplete }) {
   useEffect(() => {
     if (items.length === 0) return;
     if (onComplete) {
-      onComplete({ allOk: nokCount === 0, nokCount });
+      const fanItem = items.find((item) => item.name === "Fan");
+      onComplete({ allOk: nokCount === 0, nokCount, fanSerial: fanItem?.sn || null });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrGenealogy]);

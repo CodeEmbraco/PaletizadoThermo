@@ -44,6 +44,7 @@ import {
   getTestResults,
   selectTestResults,
   selectGlobalStatus,
+  selectServiceStatuses,
   setTestResults,
   setGlobalStatus,
 } from "../store/slice/testResultSlice";
@@ -54,6 +55,7 @@ import {
 } from "../partials/paletization/Toasts";
 import ModalBlank from "../components/ModalBlank";
 import ModalAction from "../components/ModalAction";
+import TestServiceSemaphore from "../components/TestServiceSemaphore";
 import {
   joinComponents,
   selectChartDataOrderProgress,
@@ -70,6 +72,7 @@ import BarChart04 from "../charts/BarChart04";
 function GenealogyDashboard() {
   const testResultsList = useSelector(selectTestResults);
   const globalStatus = useSelector(selectGlobalStatus);
+  const serviceStatuses = useSelector(selectServiceStatuses);
   const orderSelected = useSelector(selectOrderSelected);
   const overrideOrder = useSelector(differentOrderSelected);
   const metadata = useSelector(metadataOrderSelected);
@@ -740,7 +743,7 @@ function GenealogyDashboard() {
                       >
                         {globalStatus === 1 ? "OK" : "Error"}
                       </span>
-                      {/* Muestra los detalles de los resultados de prueba aquí si es necesario */}
+                      <TestServiceSemaphore serviceStatuses={serviceStatuses} />
                     </div>
                   ) : (
                     <p className="text-black">
