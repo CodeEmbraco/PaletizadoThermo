@@ -273,7 +273,10 @@ export const mountComponent = (payload) => (dispatch) => {
     material_type: "-",
   };
   console.log("Montando componente + ", data);
-  axios
+  // Devuelve el resultado del montaje para que la vista sepa si la pieza quedó
+  // realmente registrada: si el POST falla, el serial debe dejar de contar como
+  // montado o el operador no podría volver a escanearlo.
+  return axios
     .post(
       `http://10.13.225.20:8002/api/v1/paletization/pallets/${palletId}/components/add/`,
       data
@@ -284,20 +287,28 @@ export const mountComponent = (payload) => (dispatch) => {
       if (response.status === 201) {
         notifyProductMounted(payload.condenser);
         dispatch(getAllComponents(palletId));
-      } else if (response.status === 400) {
+        return { mounted: true, duplicate: false };
+      }
+      if (response.status === 400) {
         console.log(response.status);
         notifyProductAlreadyMounted();
-      } else {
-        console.log(response.status);
-        dispatch(setError("Hubo un error al montar el componente."));
+        return { mounted: false, duplicate: true };
       }
+      console.log(response.status);
+      notifyError("Hubo un error al montar el componente.");
+      return { mounted: false, duplicate: false };
     })
     .catch((error) => {
       // Manejo de errores, si es necesario
       console.log(error);
-      if (error.response.status === 400) {
+      // El backend responde 400 cuando el serial ya está montado. Es la última
+      // barrera contra duplicados, así que se refleja tal cual en la vista.
+      if (error?.response?.status === 400) {
         notifyProductAlreadyMounted();
+        return { mounted: false, duplicate: true };
       }
+      notifyError("Hubo un error al montar el componente.");
+      return { mounted: false, duplicate: false };
     });
 };
 

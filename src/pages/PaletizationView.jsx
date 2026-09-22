@@ -65,6 +65,7 @@ import ModalBlank from "../components/ModalBlank";
 import TestServiceSemaphore from "../components/TestServiceSemaphore";
 import CompressorMismatchModal from "../components/CompressorMismatchModal";
 import PalletProductMismatchModal from "../components/PalletProductMismatchModal";
+import DuplicateSerialModal from "../components/DuplicateSerialModal";
 import QrLabelValidationModal from "../components/QrLabelValidationModal";
 import {
   notifyError,
@@ -93,6 +94,17 @@ const useStyles = makeStyles((theme) => ({
     minWidth: 120,
   },
 }));
+
+// Los seriales se comparan siempre normalizados: el lector puede intercalar
+// espacios y el backend los devuelve tal como se guardaron. Sin esto, dos
+// escrituras del mismo serial que difieran en un espacio pasarían como
+// distintas y se montarían dos veces.
+const normalizeSerial = (serial) =>
+  String(serial ?? "").replace(/\s+/g, "").toUpperCase();
+
+// Margen para que las consultas encadenadas de un montaje (resultados de
+// prueba, genealogía, torque y POST) terminen antes de liberar el candado.
+const MOUNT_LOCK_TIMEOUT_MS = 30000;
 
 function PaletizationView() {
   const testResultsList = useSelector(selectTestResults);
@@ -132,6 +144,14 @@ function PaletizationView() {
     scannedProduct: "",
   });
 
+  // ── Serial duplicado: el mismo condensador escaneado dos veces en el pallet ──
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState({
+    scannedSerial: "",
+    position: 0,
+    reason: "",
+  });
+
   // ── Re-escaneo del QR ya impreso: detalle de la comparación contra el endpoint ──
   const [qrValidationModal, setQrValidationModal] = useState({
     open: false,
@@ -146,6 +166,53 @@ function PaletizationView() {
   // Montaje pendiente de validación: se llena al validar el escaneo
   // y solo se ejecuta cuando la validación automática de genealogía da todo OK.
   const pendingMountRef = useRef(null);
+
+  // Seriales ya enviados a montar cuya fila todavía no llega en componentsList.
+  // componentsList viene del backend y se refresca de forma asíncrona, así que
+  // entre el POST de montaje y el GET de componentes hay una ventana en la que
+  // un re-escaneo no vería la pieza como montada. Este set cubre esa ventana.
+  const inFlightSerialsRef = useRef(new Set());
+
+  // Serial cuyo montaje se está procesando en este momento (desde el escaneo
+  // hasta que el POST responde). Sirve de candado: mientras haya uno en curso
+  // no se admite otro escaneo de componente.
+  const mountingSerialRef = useRef(null);
+
+  // Si la genealogía o el torque nunca responden, el candado quedaría puesto y
+  // la estación no aceptaría más escaneos. El watchdog lo libera pasado el
+  // tiempo límite para que el operador pueda reintentar.
+  const mountLockTimerRef = useRef(null);
+
+  const releaseMountLock = () => {
+    mountingSerialRef.current = null;
+    if (mountLockTimerRef.current) {
+      clearTimeout(mountLockTimerRef.current);
+      mountLockTimerRef.current = null;
+    }
+  };
+
+  const takeMountLock = (serial) => {
+    mountingSerialRef.current = serial;
+    if (mountLockTimerRef.current) clearTimeout(mountLockTimerRef.current);
+    mountLockTimerRef.current = setTimeout(() => {
+      if (mountingSerialRef.current !== serial) return;
+      mountingSerialRef.current = null;
+      mountLockTimerRef.current = null;
+      pendingMountRef.current = null;
+      notifyError(
+        "El componente " + serial + " no completó su validación. Escanéalo de nuevo."
+      );
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Montaje LIBERADO por tiempo de espera (sin respuesta de validación): " + serial,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }, MOUNT_LOCK_TIMEOUT_MS);
+  };
+
+  useEffect(() => releaseMountLock, []);
 
   const dispatch = useDispatch();
 
@@ -166,6 +233,19 @@ function PaletizationView() {
       setEditablePalletAmount(palletamount);
     }
   }, [palletamount]);
+
+  // Cuando la lista del backend ya refleja un serial que teníamos "en vuelo",
+  // se libera del set: a partir de ahí la propia componentsList lo detecta como
+  // duplicado. Un desmontaje posterior lo quita de ambos lados y vuelve a ser
+  // escaneable, que es el comportamiento correcto.
+  useEffect(() => {
+    if (inFlightSerialsRef.current.size === 0) return;
+    componentsList.forEach((component) => {
+      inFlightSerialsRef.current.delete(
+        normalizeSerial(component?.condenser_unit_serial)
+      );
+    });
+  }, [componentsList]);
 
   // Desbloquear escaneos cuando la API confirma el pallet (identifier cambia).
   // También resetea la validación de producto para el nuevo pallet.
@@ -209,6 +289,10 @@ function PaletizationView() {
     dispatch(setDifferentOrderSelected(null));
     dispatch(setQrGenealogy([]));
     pendingMountRef.current = null;
+    inFlightSerialsRef.current.clear();
+    releaseMountLock();
+    setDuplicateOpen(false);
+    setDuplicateInfo({ scannedSerial: "", position: 0, reason: "" });
     setHasProcessed(false);
     setPalletProductValidated(false);
     setIsPalletCreating(false);
@@ -327,9 +411,27 @@ function PaletizationView() {
 
     const upperCode = formattedCode.toUpperCase();
 
-    // Límite de cantidad de pallet
-    if (componentsList.length !== 0 && componentsList.length == palletamount) {
+    // Límite de cantidad de pallet.
+    // Se cuentan también las piezas en vuelo y la que está en validación:
+    // componentsList sólo refleja lo que el backend ya confirmó, así que
+    // comparando únicamente contra ella se podían admitir escaneos de más
+    // mientras los montajes anteriores seguían viajando.
+    const enVuelo = inFlightSerialsRef.current.size + (pendingMountRef.current ? 1 : 0);
+    const totalComprometido = componentsList.length + enVuelo;
+    if (palletamount && totalComprometido >= palletamount) {
       notifyError("Cantidad de pallet ya está completada");
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Escaneo RECHAZADO — pallet completo (" +
+            totalComprometido +
+            "/" +
+            palletamount +
+            "): " +
+            upperCode,
+          timestamp: new Date().toISOString(),
+        })
+      );
       return;
     }
 
@@ -400,6 +502,66 @@ function PaletizationView() {
         );
         return;
       }
+
+      const normalizedScan = normalizeSerial(upperCode);
+
+      // ── Candado: un solo componente en proceso a la vez ──
+      // Todo el flujo (test results, genealogía, torque, POST de montaje) es
+      // asíncrono. Sin candado, dos escaneos seguidos corren en paralelo y el
+      // segundo adelanta al primero antes de que ninguno haya quedado
+      // registrado, que es como un mismo serial llegó a montarse dos veces.
+      if (mountingSerialRef.current || pendingMountRef.current) {
+        const enProceso =
+          mountingSerialRef.current ||
+          normalizeSerial(pendingMountRef.current?.data?.condenser);
+        if (enProceso === normalizedScan) {
+          setDuplicateInfo({
+            scannedSerial: upperCode,
+            position: 0,
+            reason: "El componente escaneado se encuentra en proceso de montaje.",
+          });
+          setDuplicateOpen(true);
+        } else {
+          notifyError(
+            "Espera: se está montando " + enProceso + ". Escanea de nuevo en un momento."
+          );
+        }
+        dispatch(
+          addEventToPaletizationLog({
+            text:
+              "Escaneo IGNORADO — montaje en curso (" + enProceso + "). Escaneado: " + upperCode,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return;
+      }
+
+      // ── Duplicado: el serial ya está en el pallet ──
+      // Se revisa contra la lista del backend y contra los seriales en vuelo,
+      // porque componentsList se refresca después del POST de montaje.
+      const mountedIndex = componentsList.findIndex(
+        (component) =>
+          normalizeSerial(component?.condenser_unit_serial) === normalizedScan
+      );
+      if (mountedIndex !== -1 || inFlightSerialsRef.current.has(normalizedScan)) {
+        setDuplicateInfo({
+          scannedSerial: upperCode,
+          position: mountedIndex !== -1 ? mountedIndex + 1 : 0,
+          reason: "",
+        });
+        setDuplicateOpen(true);
+        dispatch(
+          addEventToPaletizationLog({
+            text:
+              "Componente RECHAZADO — serial DUPLICADO, ya montado en este pallet: " +
+              upperCode,
+            timestamp: new Date().toISOString(),
+          })
+        );
+        return;
+      }
+
+      takeMountLock(normalizedScan);
       notifyProductScanned(upperCode);
       setBarcodeProduct(upperCode);
       dispatch(addEventToPaletizationLog({ text: "Producto escaneado: " + upperCode, timestamp: new Date().toISOString() }));
@@ -409,6 +571,7 @@ function PaletizationView() {
       dispatch(getQRThermo(upperCode));
 
       if (testStatus !== 1) {
+        releaseMountLock();
         return;
       }
 
@@ -433,6 +596,7 @@ function PaletizationView() {
           scannedPrefix,
         });
         setMismatchOpen(true);
+        releaseMountLock();
         dispatch(
           addEventToPaletizationLog({
             text:
@@ -582,9 +746,16 @@ function PaletizationView() {
 
   // Se dispara automáticamente en cuanto la genealogía escaneada se valida contra las reglas.
   const handleInspectionComplete = async ({ allOk, nokCount, fanSerial }) => {
+    // Reclamo atómico: se toma el montaje pendiente y se vacía la ref ANTES de
+    // cualquier await. Este efecto puede dispararse más de una vez por la misma
+    // pieza (cada respuesta de genealogía lo re-lanza); si se esperaba al
+    // torque con el pendiente todavía puesto, dos ejecuciones montaban el mismo
+    // serial y el pallet terminaba con una unidad de más.
     const pending = pendingMountRef.current;
+    pendingMountRef.current = null;
+
     if (!allOk) {
-      pendingMountRef.current = null;
+      releaseMountLock();
       notifyError("Validación de genealogía con errores: la pieza no se puede montar");
       dispatch(
         addEventToPaletizationLog({
@@ -603,7 +774,7 @@ function PaletizationView() {
     }
 
     if (!fanSerial) {
-      pendingMountRef.current = null;
+      releaseMountLock();
       notifyError("No se encontró el serial del fan en la genealogía: la pieza no se puede montar");
       dispatch(
         addEventToPaletizationLog({
@@ -619,7 +790,7 @@ function PaletizationView() {
     // Prueba de torque ECMFAN del fan, justo antes de montar.
     const fanTorqueStatus = await Promise.resolve(dispatch(getFanTorqueResult(fanSerial)));
     if (fanTorqueStatus !== 1) {
-      pendingMountRef.current = null;
+      releaseMountLock();
       notifyError("Prueba de torque ECMFAN del fan (" + fanSerial + ") no aprobada: la pieza no se puede montar");
       dispatch(
         addEventToPaletizationLog({
@@ -632,7 +803,36 @@ function PaletizationView() {
       return;
     }
 
-    pendingMountRef.current = null;
+    // Última verificación justo antes del POST: entre el escaneo y este punto
+    // hubo varias llamadas asíncronas y la lista pudo actualizarse.
+    const serialToMount = normalizeSerial(pending.data.condenser);
+    const yaMontado =
+      inFlightSerialsRef.current.has(serialToMount) ||
+      componentsList.some(
+        (component) =>
+          normalizeSerial(component?.condenser_unit_serial) === serialToMount
+      );
+    if (yaMontado) {
+      releaseMountLock();
+      setDuplicateInfo({
+        scannedSerial: pending.data.condenser,
+        position: 0,
+        reason: "El componente escaneado ya quedó registrado en este pallet.",
+      });
+      setDuplicateOpen(true);
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Montaje ABORTADO — el serial ya estaba montado al momento de enviar: " +
+            pending.data.condenser,
+          timestamp: new Date().toISOString(),
+        })
+      );
+      return;
+    }
+
+    inFlightSerialsRef.current.add(serialToMount);
+    releaseMountLock();
     dispatch(
       addEventToPaletizationLog({
         text:
@@ -641,8 +841,26 @@ function PaletizationView() {
         timestamp: new Date().toISOString(),
       })
     );
-    dispatch(mountComponent(pending.data));
+    const mountResult = await Promise.resolve(dispatch(mountComponent(pending.data)));
     dispatch(getMetadataFromOrder(pending.condenserMaterial));
+
+    if (!mountResult?.mounted) {
+      // No quedó registrada: se libera el serial para poder reintentar, salvo
+      // que el backend la haya rechazado por duplicada (ahí sí está montada).
+      if (!mountResult?.duplicate) {
+        inFlightSerialsRef.current.delete(serialToMount);
+      }
+      dispatch(
+        addEventToPaletizationLog({
+          text:
+            "Montaje NO confirmado por el servidor (" +
+            (mountResult?.duplicate ? "duplicado" : "error") +
+            "): " +
+            pending.data.condenser,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
   };
 
   function handleNew() {
@@ -657,6 +875,10 @@ function PaletizationView() {
     dispatch(setDifferentOrderSelected(null));
     dispatch(setQrGenealogy([]));
     pendingMountRef.current = null;
+    inFlightSerialsRef.current.clear();
+    releaseMountLock();
+    setDuplicateOpen(false);
+    setDuplicateInfo({ scannedSerial: "", position: 0, reason: "" });
     setHasProcessed(false);
     setPalletProductValidated(false);
     setIsPalletCreating(false);
@@ -1229,6 +1451,14 @@ function PaletizationView() {
         onClose={() => setPalletProductMismatchOpen(false)}
         expectedProduct={palletProductMismatchInfo.expectedProduct}
         scannedProduct={palletProductMismatchInfo.scannedProduct}
+      />
+
+      <DuplicateSerialModal
+        open={duplicateOpen}
+        onClose={() => setDuplicateOpen(false)}
+        scannedSerial={duplicateInfo.scannedSerial}
+        position={duplicateInfo.position}
+        reason={duplicateInfo.reason}
       />
 
       <QrLabelValidationModal
