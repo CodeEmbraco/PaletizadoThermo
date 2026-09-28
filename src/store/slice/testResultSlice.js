@@ -114,9 +114,10 @@ export const getTestResults = (barcode) => async (dispatch) => {
 // Se consulta justo antes de montar. El serial del fan en el QR trae el
 // prefijo "51" que la tabla Torque_Data no incluye, así que se recorta.
 export const getFanTorqueResult = (fanBarcode) => async (dispatch) => {
-    const torqueSerial = fanBarcode && fanBarcode.startsWith("51")
-      ? fanBarcode.slice(2)
-      : fanBarcode;
+    const torqueSerial = fanBarcode;
+    //   && fanBarcode.startsWith("51")
+    //   ? fanBarcode.slice(2)
+    //   : fanBarcode;
     try {
         const data = await call(`http://em10vs0010.embraco.com:8001/api/v1/test-result-ecmfan?barcode=${torqueSerial}`)
 
